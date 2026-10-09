@@ -1,0 +1,256 @@
+import { dayOffset, today } from "./model.ts";
+import type { Workspace, CaseRecord, Stage, Agent } from "./model.ts";
+export function makeSeed(): Workspace {
+  const firm_id = "10000000-0000-4000-8000-000000000001";
+  const names = [
+    ["Nadia Rahman", "Vantage Realty", "teal"],
+    ["Daniel Lim", "Hartamas Real Estate", "blue"],
+    ["Amir Hakim", "IQI Realty", "amber"],
+    ["Sarah Tan", "PropNex Malaysia", "violet"],
+  ];
+  const agents: Agent[] = names.map((a, i) => ({
+    id: `20000000-0000-4000-8000-00000000000${i + 1}`,
+    firm_id,
+    name: a[0],
+    agency: a[1],
+    color: a[2],
+    email: a[0].toLowerCase().replace(" ", ".") + "@example.com",
+    phone: "",
+    created_at: dayOffset(-40) + "T02:00:00Z",
+  }));
+  const rows: [
+    string,
+    string,
+    string,
+    Stage,
+    number,
+    number,
+    number,
+    string,
+  ][] = [
+    [
+      "Ahmad & Nurul",
+      "22 Jalan Setia Indah, Setia Alam",
+      "Subsale",
+      "spa",
+      0,
+      3,
+      720000,
+      "Finalise SPA with the purchaser’s solicitor",
+    ],
+    [
+      "Jason Wong",
+      "The Fennel, Sentul · Unit A-18-05",
+      "Loan",
+      "loan",
+      1,
+      -2,
+      580000,
+      "Follow up on the bank’s letter of instruction",
+    ],
+    [
+      "Siti Aishah",
+      "8 Jalan Melati, Shah Alam",
+      "Subsale",
+      "redemption",
+      2,
+      6,
+      650000,
+      "Obtain the updated redemption statement",
+    ],
+    [
+      "Cheryl & Kevin",
+      "The Light, Gelugor · Unit 12-08",
+      "SPA",
+      "stamping",
+      3,
+      4,
+      1250000,
+      "Confirm stamp duty assessment",
+    ],
+    [
+      "Muhammad Faris",
+      "16 Jalan Merbau, Sungai Petani",
+      "Subsale",
+      "documents",
+      0,
+      12,
+      420000,
+      "Collect the vendor’s outstanding documents",
+    ],
+    [
+      "Priya Nair",
+      "Eco Ardence, Setia Alam · Lot 28",
+      "Refinance",
+      "disbursement",
+      1,
+      1,
+      890000,
+      "Confirm the bank’s release of funds",
+    ],
+    [
+      "Lee Wei Ming",
+      "Tropicana Gardens · Unit C-22-03",
+      "Subsale",
+      "on_hold",
+      3,
+      -4,
+      760000,
+      "Await seller’s instruction on the title issue",
+    ],
+    [
+      "Hana Ismail",
+      "3 Jalan Anggerik, Bangi",
+      "SPA",
+      "spa",
+      2,
+      9,
+      510000,
+      "Circulate the revised agreement for review",
+    ],
+    [
+      "Darren Choong",
+      "Verve Suites, Mont Kiara · B-15-01",
+      "Loan",
+      "loan",
+      1,
+      8,
+      680000,
+      "Arrange signing of loan documentation",
+    ],
+    [
+      "Zainab Hassan",
+      "19 Jalan Aman, Alor Setar",
+      "Subsale",
+      "completed",
+      0,
+      -5,
+      380000,
+      "Keys released; file ready for archiving",
+    ],
+    [
+      "Marcus & Elaine",
+      "Mutiara Damansara · No. 26",
+      "Subsale",
+      "completed",
+      3,
+      -10,
+      1450000,
+      "Transfer completed and client notified",
+    ],
+    [
+      "Ravi Kumar",
+      "Bukit Jalil City · Unit D-10-02",
+      "SPA",
+      "stamping",
+      2,
+      15,
+      610000,
+      "Lodge transfer documents for registration",
+    ],
+  ];
+  const cases: CaseRecord[] = rows.map((r, i) => ({
+    id: `30000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`,
+    firm_id,
+    ref: `CT-${today().slice(0, 4)}-${String(1041 + i).padStart(4, "0")}`,
+    buyer: r[0],
+    seller: [
+      "Horizon Properties Sdn Bhd",
+      "Private vendor",
+      "Meridian Development",
+    ][i % 3],
+    property: r[1],
+    type: r[2] as CaseRecord["type"],
+    status: r[3],
+    priority: [1, 6].includes(i) ? "high" : "normal",
+    agent_id: agents[r[4]].id,
+    owner: ["Aina Yusuf", "Ethan Lee", "Farah Aziz"][i % 3],
+    due_date: dayOffset(r[5]),
+    next_step: r[7],
+    notes:
+      i === 6
+        ? "Waiting for the seller to resolve a discrepancy in the title particulars."
+        : "",
+    value: r[6],
+    created_at: dayOffset(-35 + i) + "T02:00:00Z",
+    updated_at: dayOffset(-(i % 4)) + "T03:15:00Z",
+  }));
+  const tasks = [
+    {
+      title: "Follow up on bank instruction",
+      ci: 1,
+      offset: -1,
+      who: "Ethan Lee",
+      priority: "high" as const,
+    },
+    {
+      title: "Confirm signing appointment",
+      ci: 0,
+      offset: 0,
+      who: "Aina Yusuf",
+      priority: "normal" as const,
+    },
+    {
+      title: "Request redemption statement",
+      ci: 2,
+      offset: 0,
+      who: "Farah Aziz",
+      priority: "normal" as const,
+    },
+    {
+      title: "Review title discrepancy",
+      ci: 6,
+      offset: 1,
+      who: "Aina Yusuf",
+      priority: "high" as const,
+    },
+    {
+      title: "Check stamp duty assessment",
+      ci: 3,
+      offset: 2,
+      who: "Aina Yusuf",
+      priority: "normal" as const,
+    },
+    {
+      title: "Send completion statement",
+      ci: 9,
+      offset: -2,
+      who: "Aina Yusuf",
+      priority: "normal" as const,
+    },
+  ].map((t, i) => ({
+    id: `40000000-0000-4000-8000-00000000000${i + 1}`,
+    firm_id,
+    case_id: cases[t.ci].id,
+    title: t.title,
+    due_date: dayOffset(t.offset),
+    assignee: t.who,
+    completed: i === 5,
+    priority: t.priority,
+    created_at: dayOffset(-3) + "T02:00:00Z",
+  }));
+  const activities = cases.slice(0, 6).map((c, i) => ({
+    id: crypto.randomUUID(),
+    firm_id,
+    case_id: c.id,
+    title:
+      i === 0
+        ? "SPA ready for review"
+        : i === 1
+          ? "Bank instruction requested"
+          : i === 2
+            ? "Redemption statement requested"
+            : "Case progress updated",
+    detail: c.next_step,
+    kind: "status" as const,
+    actor: c.owner,
+    created_at: dayOffset(-Math.floor(i / 3)) + `T0${6 - (i % 3)}:15:00Z`,
+  }));
+  return {
+    firm: { id: firm_id, name: "Meridian & Co.", email: "office@example.com" },
+    cases,
+    agents,
+    tasks,
+    activities,
+  };
+}
