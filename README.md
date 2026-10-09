@@ -70,7 +70,7 @@ npm run build
 npm audit
 ```
 
-Tests cover business dates, overdue rules, CSV escaping, encrypted persistence, passphrase rejection, tamper detection, session expiry, request-origin checks and local file permissions. CI runs on Node 24 on Linux, macOS and Windows.
+Tests cover business dates, overdue rules, CSV escaping, encrypted persistence, passphrase rejection, tamper detection, session expiry, request-origin checks and local file permissions. CI is configured for Node 24 on Linux, macOS and Windows.
 
 ### Structure
 
