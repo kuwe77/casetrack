@@ -245,6 +245,13 @@ function Dashboard({
   const selected = w.cases.find((c) => c.id === selectedId),
     due = w.tasks.filter(isTaskDue),
     overdue = w.cases.filter(isOverdue);
+  const activeCases = w.cases.filter((c) => c.status !== "completed");
+  const openTasks = w.tasks.filter((t) => !t.completed);
+  const weekTasks = openTasks.filter(
+    (t) => t.due_date >= today() && t.due_date <= dayOffset(6),
+  );
+  const activeValue = activeCases.reduce((sum, c) => sum + c.value, 0);
+  const totalValue = w.cases.reduce((sum, c) => sum + c.value, 0);
   async function submit(
     kind: Edit["kind"],
     record: CaseRecord | Agent | FollowUp,
@@ -353,6 +360,29 @@ function Dashboard({
       </aside>
       <div className="main-shell">
         <header className="topbar">
+          <a
+            className="desktop-brand"
+            href="#overview"
+            onClick={() => go("overview")}
+            aria-label="CaseTrack overview"
+          >
+            <span className="brand-mark">
+              <FolderKanban size={23} />
+            </span>
+          </a>
+          <nav className="desktop-navigation" aria-label="Main navigation">
+            {navigation.map((n) => (
+              <Button
+                key={n.id}
+                variant="ghost"
+                className={page === n.id ? "selected" : ""}
+                aria-current={page === n.id ? "page" : undefined}
+                onClick={() => go(n.id)}
+              >
+                {n.label}
+              </Button>
+            ))}
+          </nav>
           <div className="breadcrumbs">
             <Button
               variant="ghost"
@@ -398,7 +428,17 @@ function Dashboard({
               <Bell size={20} />
               {due.length > 0 && <i />}
             </Button>
-            <Avatar name="Workspace Admin" small />
+            <Button
+              variant="ghost"
+              className="header-workspace"
+              onClick={() => go("settings")}
+              aria-label={`Workspace settings: ${w.firm.name}`}
+              title={w.firm.name}
+            >
+              <Avatar name={w.firm.name} small />
+              <span>{w.firm.name}</span>
+              <GearSix size={17} />
+            </Button>
           </div>
         </header>
         <main className="main-content">
@@ -441,9 +481,11 @@ function Dashboard({
               <div className="stats-strip">
                 <Stat
                   label="Active cases"
-                  value={w.cases
-                    .filter((c) => c.status !== "completed")
-                    .length.toString()}
+                  tone="mint"
+                  current={activeCases.length}
+                  total={w.cases.length}
+                  meterLabel={`${activeCases.length} of ${w.cases.length} matters active`}
+                  value={activeCases.length.toString()}
                   icon={<FolderSimple size={19} />}
                   detail={`${w.agents.length} property agents in your network`}
                   onClick={() => {
@@ -456,7 +498,10 @@ function Dashboard({
                   value={overdue.length.toString().padStart(2, "0")}
                   icon={<WarningCircle size={19} />}
                   detail="Cases past their target date"
-                  tone="orange"
+                  tone="coral"
+                  current={overdue.length}
+                  total={activeCases.length}
+                  meterLabel={`${overdue.length} of ${activeCases.length} active matters overdue`}
                   onClick={() => {
                     setCaseTab("attention");
                     go("cases");
@@ -464,26 +509,23 @@ function Dashboard({
                 />
                 <Stat
                   label="Due this week"
-                  value={w.tasks
-                    .filter(
-                      (t) =>
-                        !t.completed &&
-                        t.due_date >= today() &&
-                        t.due_date <= dayOffset(6),
-                    )
-                    .length.toString()
-                    .padStart(2, "0")}
+                  tone="lilac"
+                  current={weekTasks.length}
+                  total={openTasks.length}
+                  meterLabel={`${weekTasks.length} of ${openTasks.length} open follow-ups`}
+                  value={weekTasks.length.toString().padStart(2, "0")}
                   icon={<CalendarBlank size={19} />}
                   detail="Follow-ups over the next 7 days"
                   onClick={() => go("followups")}
                 />
                 <Stat
                   label="Active portfolio"
-                  value={compactMoney(
-                    w.cases
-                      .filter((c) => c.status !== "completed")
-                      .reduce((s, c) => s + c.value, 0),
-                  )}
+                  showMeter={false}
+                  tone="rose"
+                  current={activeValue}
+                  total={totalValue}
+                  meterLabel={`${compactMoney(totalValue)} across all matters`}
+                  value={compactMoney(activeValue)}
                   icon={<HouseLine size={19} />}
                   detail="Total property value · MYR"
                 />
@@ -516,7 +558,7 @@ function Dashboard({
                       return (
                         <Button
                           variant="ghost"
-                          className={`pipeline-column pipeline-${i}`}
+                          className={`pipeline-column pipeline-${i} tone-${s.tone}`}
                           key={s.id}
                           onClick={() => {
                             setCaseTab(s.id);
@@ -789,13 +831,21 @@ function Stat({
   detail,
   icon,
   tone,
+  current,
+  total,
+  meterLabel,
+  showMeter = true,
   onClick,
 }: {
   label: string;
   value: string;
   detail: string;
   icon: React.ReactNode;
-  tone?: string;
+  tone: string;
+  current: number;
+  total: number;
+  meterLabel: string;
+  showMeter?: boolean;
   onClick?: () => void;
 }) {
   const contents = (
@@ -804,18 +854,41 @@ function Stat({
         {label}
         <span>{icon}</span>
       </div>
-      <div className={`stat-value ${tone || ""}`}>
-        {value}
-        {onClick && <ArrowUpRight size={18} />}
+      <div className={`stat-value ${tone || ""}`}>{value}</div>
+      <div className="stat-detail">{detail}</div>
+      <div className="stat-meter-caption">
+        <span>{meterLabel}</span>
+        {showMeter && (
+          <span>{total ? Math.round((current / total) * 100) : 0}%</span>
+        )}
       </div>
-      <div className="stat-detail">
-        {tone && <span className="attention-dot" />}
-        {detail}
-      </div>
+      {showMeter ? (
+        <div
+          className="stat-meter"
+          role="meter"
+          aria-label={label}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={total ? Math.round((current / total) * 100) : 0}
+          aria-valuetext={meterLabel}
+        >
+          <span
+            style={{
+              width: `${total ? Math.min(100, (current / total) * 100) : 0}%`,
+            }}
+          />
+        </div>
+      ) : (
+        <div className="portfolio-caption">
+          {current
+            ? "Value of ongoing matters"
+            : "No active property value yet"}
+        </div>
+      )}
     </>
   );
   return (
-    <Card className="stat-card">
+    <Card className={`stat-card stat-${tone}`}>
       {onClick ? (
         <Button variant="ghost" className="stat" onClick={onClick}>
           {contents}
@@ -1133,7 +1206,7 @@ function CasesPage({
         {board ? (
           <div className="case-board">
             {stages.map((s) => (
-              <div className="board-column" key={s.id}>
+              <div className={`board-column tone-${s.tone}`} key={s.id}>
                 <div className="board-heading">
                   <span>{s.label}</span>
                   <small>
