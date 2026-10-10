@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  writeFileSync,
+  existsSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore } from "./store.mjs";
@@ -23,26 +29,19 @@ function fixture(t) {
     },
   };
 }
-test("first run is locked, and an encrypted workspace survives restart", async (t) => {
+test("workspace-name-only setup opens automatically after restart", async (t) => {
   const f = fixture(t);
   assert.equal(f.store.initialized(), false);
-  assert.throws(() => f.store.read(), /locked/);
+  assert.equal(f.store.read(), null);
   await f.store.setup({
     name: "Local firm",
-    password: "Test-only passphrase for vault",
   });
   f.reopen();
-  await assert.rejects(
-    f.store.unlock("Wrong passphrase provided"),
-    /Incorrect/,
-  );
-  await f.store.unlock("Test-only passphrase for vault");
   assert.equal(f.store.read().firm.name, "Local firm");
   assert.deepEqual(f.store.read().cases, []);
   await assert.rejects(
     f.store.setup({
       name: "Overwrite",
-      password: "Test-only passphrase for vault",
     }),
     /already exists/,
   );
@@ -52,7 +51,6 @@ test("case progress, agent edits, follow-ups and notes survive restart", async (
   await f.store.setup({
     name: "Sample firm",
     sample: true,
-    password: "Test-only passphrase for vault",
   });
   const w = f.store.read(),
     c = w.cases[0],
@@ -70,7 +68,6 @@ test("case progress, agent edits, follow-ups and notes survive restart", async (
     note: "Completion verified",
   });
   f.reopen();
-  await f.store.unlock("Test-only passphrase for vault");
   const saved = f.store.read();
   assert.equal(saved.cases.find((x) => x.id === c.id).status, "completed");
   assert.equal(saved.agents[0].name, "Updated agent");
@@ -83,7 +80,6 @@ test("invalid writes roll back without corrupting records or audit history", asy
   await store.setup({
     name: "Validation firm",
     sample: true,
-    password: "Test-only passphrase for vault",
   });
   const w = store.read();
   assert.throws(
@@ -118,4 +114,28 @@ test("invalid writes roll back without corrupting records or audit history", asy
     /does not exist/,
   );
   assert.deepEqual(store.read(), w);
+});
+
+test("missing or replaced local keys fail closed and preserve records", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "casetrack-key-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, "test.sqlite"),
+    keyPath = join(dir, "workspace.key");
+  const store = openStore(path);
+  await store.setup({ name: "Key recovery test" });
+  store.close();
+  const key = readFileSync(keyPath);
+  assert.equal(key.length, 32);
+  rmSync(keyPath);
+  assert.throws(() => openStore(path), /no local key/);
+  assert.equal(existsSync(keyPath), false);
+  writeFileSync(keyPath, Buffer.alloc(32));
+  assert.throws(() => openStore(path));
+  writeFileSync(keyPath, key);
+  const restored = openStore(path);
+  try {
+    assert.equal(restored.read().firm.name, "Key recovery test");
+  } finally {
+    restored.close();
+  }
 });

@@ -1,26 +1,5 @@
-import {
-  randomBytes,
-  scrypt,
-  createCipheriv,
-  createDecipheriv,
-} from "node:crypto";
-import { promisify } from "node:util";
-const derive = promisify(scrypt);
+import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
 const aad = Buffer.from("casetrack-vault-v1");
-export async function deriveKey(password, salt) {
-  if (
-    typeof password !== "string" ||
-    password.length < 14 ||
-    password.length > 1024
-  )
-    throw Error("Use a passphrase between 14 and 1024 characters.");
-  return derive(password, salt, 32, {
-    N: 131072,
-    r: 8,
-    p: 1,
-    maxmem: 192 * 1024 * 1024,
-  });
-}
 export function encrypt(data, key) {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);

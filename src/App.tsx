@@ -62,8 +62,6 @@ import {
   saveTask,
   saveFirm,
   addNote,
-  localApi,
-  lockWorkspace,
   errorMessage,
 } from "./lib/repository";
 import {
@@ -76,8 +74,8 @@ import {
   TextLink,
 } from "./components/ui";
 import { Editor } from "./components/forms";
-import { Unlock } from "./components/unlock";
-import { LockKeyhole, FolderKanban, Sun, Moon } from "lucide-react";
+import { WorkspaceSetup } from "./components/workspace-setup";
+import { FolderKanban, Sun, Moon } from "lucide-react";
 import { Button } from "./components/ui/button";
 import {
   Table,
@@ -105,24 +103,9 @@ const navigation = [
   { id: "activity", label: "Activity", icon: ClockCounterClockwise },
 ] as const;
 export function App() {
-  const [session, setSession] = useState<{
-    initialized: boolean;
-    authenticated: boolean;
-  } | null>(null);
-  const [workspace, setWorkspace] = useState<Workspace | null>(null),
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [loading, setLoading] = useState(true),
     [error, setError] = useState("");
-  const checkSession = useCallback(async () => {
-    try {
-      const next = await localApi<{
-        initialized: boolean;
-        authenticated: boolean;
-      }>("session");
-      setSession(next);
-      if (!next.authenticated) setWorkspace(null);
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  }, []);
   const reload = useCallback(async () => {
     setError("");
     try {
@@ -130,34 +113,13 @@ export function App() {
     } catch (e) {
       setError(errorMessage(e));
       throw e;
+    } finally {
+      setLoading(false);
     }
   }, []);
   useEffect(() => {
-    void checkSession();
-    const locked = () => {
-      setWorkspace(null);
-      setError("");
-      setSession({ initialized: true, authenticated: false });
-    };
-    window.addEventListener("casetrack:locked", locked);
-    window.addEventListener("focus", checkSession);
-    const timer = setInterval(checkSession, 30000);
-    return () => {
-      window.removeEventListener("casetrack:locked", locked);
-      window.removeEventListener("focus", checkSession);
-      clearInterval(timer);
-    };
-  }, [checkSession]);
-  useEffect(() => {
-    if (session?.authenticated) void reload().catch(() => {});
-  }, [session?.authenticated, reload]);
-  if (session && !session.authenticated)
-    return (
-      <Unlock
-        initialized={session.initialized}
-        onReady={() => void checkSession()}
-      />
-    );
+    void reload().catch(() => {});
+  }, [reload]);
   if (error && !workspace)
     return (
       <div className="center-state">
@@ -167,7 +129,6 @@ export function App() {
         <Button
           onClick={() => {
             setError("");
-            void checkSession();
             void reload().catch(() => {});
           }}
         >
@@ -175,13 +136,15 @@ export function App() {
         </Button>
       </div>
     );
-  if (!workspace)
+  if (loading)
     return (
       <div className="center-state">
         <SpinnerGap className="spin" size={24} />
         <p>Opening workspace…</p>
       </div>
     );
+  if (!workspace)
+    return <WorkspaceSetup onReady={() => void reload().catch(() => {})} />;
   return (
     <Dashboard workspace={workspace} reload={reload} refreshError={error} />
   );
@@ -385,17 +348,6 @@ function Dashboard({
               <strong>Workspace admin</strong>
               <small>Encrypted workspace</small>
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Lock workspace"
-              title="Lock workspace"
-              onClick={() =>
-                void lockWorkspace().catch((e) => setToast(errorMessage(e)))
-              }
-            >
-              <LockKeyhole size={17} />
-            </Button>
           </div>
         </div>
       </aside>
@@ -1735,31 +1687,24 @@ function SettingsPage({
             </span>
             <h2>Encrypted local workspace</h2>
             <p>
-              Records are encrypted before they reach the database. Your
-              passphrase unlocks them on this computer.
+              Records are encrypted before they reach the database. The
+              encryption key is stored locally on this computer.
             </p>
             <span className="connection-status live">
               <i /> AES-256-GCM encryption
             </span>
             <p className="connection-note">
-              The workspace locks after 15 minutes without a data request. Lock
-              it manually when you step away.
+              No sign-in is required. Anyone who can use this computer can open
+              the workspace. Protect your OS account and backups.
             </p>
-            <Button
-              variant="outline"
-              onClick={() =>
-                void lockWorkspace().catch((e) => setError(errorMessage(e)))
-              }
-            >
-              <LockKeyhole size={16} /> Lock workspace
-            </Button>
           </Card>
           <section className="settings-export">
-            <h3>Encrypted backups</h3>
+            <h3>Local backups</h3>
             <p>
               Stop CaseTrack, then copy the entire data folder to a safe
-              location. Restore it with the app stopped. Keep your passphrase:
-              backups cannot be opened without it.
+              location. Restore it with the app stopped. Include workspace.key:
+              the database cannot be opened without its original key. Keep the
+              backup private because it contains both the records and key.
             </p>
             <code>data/casetrack.sqlite</code>
           </section>

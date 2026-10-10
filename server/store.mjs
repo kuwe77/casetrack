@@ -1,9 +1,15 @@
 import { DatabaseSync } from "node:sqlite";
-import { mkdirSync, chmodSync, existsSync } from "node:fs";
-import { dirname } from "node:path";
+import {
+  mkdirSync,
+  chmodSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import { randomUUID, randomBytes } from "node:crypto";
 import { z } from "zod";
-import { deriveKey, encrypt, decrypt } from "./crypto.mjs";
+import { encrypt, decrypt } from "./crypto.mjs";
 import { makeSeed } from "../src/lib/seed.ts";
 import { stages } from "../src/lib/model.ts";
 
@@ -83,20 +89,40 @@ export function openStore(path) {
   if (process.platform !== "win32")
     for (const file of [path, path + "-wal", path + "-shm"])
       if (existsSync(file)) chmodSync(file, 0o600);
-  let key = null;
   const row = () => db.prepare("SELECT salt, data FROM vault WHERE id=1").get();
   const initialized = () => Boolean(row());
-  const lock = () => {
+  const keyPath = join(dirname(path), "workspace.key");
+  let key;
+  try {
+    if (!existsSync(keyPath)) {
+      if (initialized())
+        throw Error(
+          "This database has no local key. Restore its workspace.key from backup. For a previous passphrase-protected workspace, use the previous version to access it; the database has not been changed.",
+        );
+      try {
+        writeFileSync(keyPath, randomBytes(32), { flag: "wx", mode: 0o600 });
+      } catch (e) {
+        if (e.code !== "EEXIST") throw e;
+      }
+    }
+    if (process.platform !== "win32") chmodSync(keyPath, 0o600);
+    key = readFileSync(keyPath);
+    if (key.length !== 32)
+      throw Error(
+        "Invalid workspace.key. Restore the original key from backup.",
+      );
+    const saved = row();
+    if (saved) decrypt(saved.data, key);
+  } catch (e) {
     key?.fill(0);
-    key = null;
-  };
+    db.close();
+    throw e;
+  }
   const read = () => {
-    if (!key) throw Error("Workspace is locked.");
     const saved = row();
     return saved ? decrypt(saved.data, key) : null;
   };
   const write = (data) => {
-    if (!key) throw Error("Workspace is locked.");
     db.prepare("UPDATE vault SET data=? WHERE id=1").run(encrypt(data, key));
   };
   const event = (w, case_id, title, detail, kind) =>
@@ -113,9 +139,8 @@ export function openStore(path) {
   return {
     read,
     initialized,
-    lock,
     close: () => {
-      lock();
+      key.fill(0);
       db.close();
     },
     async setup(input) {
@@ -123,46 +148,24 @@ export function openStore(path) {
         .object({
           name,
           sample: z.boolean().default(false),
-          password: z.string().min(14).max(1024),
         })
         .parse(input);
       if (initialized()) throw Error("A workspace already exists.");
-      const salt = randomBytes(32),
-        candidate = await deriveKey(payload.password, salt);
-      try {
-        const w = payload.sample
-          ? makeSeed()
-          : {
-              firm: { id: randomUUID(), name: payload.name, email: "" },
-              cases: [],
-              agents: [],
-              tasks: [],
-              activities: [],
-            };
-        w.firm.name = payload.name;
-        db.prepare("INSERT INTO vault VALUES(1, ?, ?)").run(
-          salt,
-          encrypt(w, candidate),
-        );
-        lock();
-        key = candidate;
-      } catch (e) {
-        candidate.fill(0);
-        throw e;
-      }
-    },
-    async unlock(password) {
-      const saved = row();
-      if (!saved) throw Error("Create a workspace first.");
-      const candidate = await deriveKey(password, saved.salt);
-      try {
-        decrypt(saved.data, candidate);
-      } catch {
-        candidate.fill(0);
-        throw Error("Incorrect passphrase or damaged database.");
-      }
-      lock();
-      key = candidate;
+      const w = payload.sample
+        ? makeSeed()
+        : {
+            firm: { id: randomUUID(), name: payload.name, email: "" },
+            cases: [],
+            agents: [],
+            tasks: [],
+            activities: [],
+          };
+      w.firm.name = payload.name;
+      // Keep the reserved salt column compatible with earlier vault schemas.
+      db.prepare("INSERT INTO vault VALUES(1, ?, ?)").run(
+        Buffer.alloc(32),
+        encrypt(w, key),
+      );
     },
     mutate(route, input) {
       db.exec("BEGIN IMMEDIATE");

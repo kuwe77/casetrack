@@ -20,17 +20,13 @@ export async function localApi<T = unknown>(
   if (!res.ok) throw Error(result.error || "Could not complete request.");
   return result;
 }
-export const loadWorkspace = () => localApi<Workspace>("workspace");
+export const loadWorkspace = () => localApi<Workspace | null>("workspace");
 export const saveCase = (record: CaseRecord) => localApi("cases", record);
 export const saveAgent = (record: Agent) => localApi("agents", record);
 export const saveTask = (record: FollowUp) => localApi("tasks", record);
 export const saveFirm = (record: Firm) => localApi("firm", record);
 export const addNote = (firm_id: string, case_id: string, note: string) =>
   localApi("notes", { firm_id, case_id, note });
-export async function lockWorkspace() {
-  await localApi("lock", {});
-  window.dispatchEvent(new Event("casetrack:locked"));
-}
 export function errorMessage(e: unknown) {
   if (e && typeof e === "object" && "message" in e) return String(e.message);
   return "Something went wrong. Please try again.";

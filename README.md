@@ -18,7 +18,7 @@ npm run build
 npm start
 ```
 
-Open **http://localhost:4173**. On first launch, choose a workspace name and a unique passphrase of at least 14 characters. You can optionally load fictional sample cases. Keep your passphrase in a password manager: there is no reset, recovery key or service that can decrypt your records for you.
+Open **http://localhost:4173**. On first launch, choose a workspace name. You can optionally load fictional sample cases. No passphrase or sign-in is required; later launches open your workspace directly. Rename it any time in Settings.
 
 Later, run `npm start` from the same folder. Stop with Ctrl+C. No cloud account, external database, deployment, API key or environment file is required. Installation downloads dependencies; everyday operation works offline. Fonts are bundled, with no analytics or remote scripts.
 
@@ -38,20 +38,24 @@ Later, run `npm start` from the same folder. Stop with Ctrl+C. No cloud account,
 
 ## Data and security
 
-The server listens only on `127.0.0.1`. Case records are stored as an AES-256-GCM encrypted workspace payload inside `data/casetrack.sqlite`, including activity and contact details. A key is derived from your passphrase using scrypt; neither the passphrase nor the encryption key is saved to disk. The SQLite file and journals contain encrypted record data, not plaintext cases.
+The server listens only on `127.0.0.1`. Case records, contacts and activity are stored as an AES-256-GCM encrypted payload inside `data/casetrack.sqlite`. A random 256-bit key is generated automatically and saved in `data/workspace.key`. The SQLite file and journals contain encrypted record data.
 
-The workspace starts locked after a restart. An authenticated browser session is required to read or change data. Lock it from the sidebar or Settings. The server also locks after 15 minutes without an authenticated data request; the browser checks session status every 30 seconds and on focus. The session check itself does not extend the timeout. Unlocking in a second browser invalidates the previous session.
+There is no application login or lock. **Anyone who can access the running local server, or copy both the database and its key, can read and change the workspace.** Your OS account, file permissions and full-disk encryption are the access boundary. Local encryption protects a database copied without its key; it does not protect a stolen copy of the entire data folder.
 
-Records are not stored in browser localStorage; only the light/dark preference is. CSV exports are **unencrypted**. Keep them somewhere appropriate. Encryption does not protect data while displayed or against malware, a compromised OS/browser, or someone using your unlocked computer.
+Records are not stored in browser localStorage; only the light/dark preference is. CSV exports are **unencrypted**. Use FileVault, BitLocker or equivalent and lock your computer when leaving it.
 
 ### Back up and restore
 
 1. Stop CaseTrack with Ctrl+C so SQLite can close cleanly.
-2. Copy the **entire `data` folder** to your backup destination. Do not commit it to Git or attach it to an issue.
-3. Keep the passphrase separately in your password manager.
-4. To restore, stop CaseTrack, preserve your current data folder as a backup, copy the saved data folder into the project, then run `npm start` and unlock using its original passphrase.
+2. Copy the **entire `data` folder**, including `workspace.key`, to a protected backup destination. Never commit it to Git or attach it to an issue.
+3. Encrypt backups separately: the folder includes everything needed to decrypt your records.
+4. To restore, stop CaseTrack, preserve your current data folder, copy the saved folder into the project, then run `npm start`.
 
-The app has no passphrase-change or forgotten-passphrase recovery feature yet. If the passphrase is lost, the records cannot be recovered. Keep multiple encrypted backup copies. Full-disk encryption (FileVault, BitLocker or equivalent) provides additional protection for exports, swap and other system files.
+Losing `workspace.key` makes the records unrecoverable. The app refuses to replace a missing or incorrect key when an existing workspace is present.
+
+### Earlier passphrase-protected workspaces
+
+Existing populated databases from the passphrase release are not automatically migrated. Keep an intact backup and use that release with the original passphrase to access them. This version stops with a clear error instead of overwriting the data. Fresh or uninitialized installations use automatic local keys.
 
 By default, data lives beside the source. For a custom directory or port, set `CASETRACK_DATA_DIR` or `PORT` in your shell before `npm start`. The listening interface remains loopback-only. Use one server process per data directory. There is no supported LAN, reverse-proxy, Docker or public-hosting mode.
 
@@ -70,7 +74,7 @@ npm run build
 npm audit
 ```
 
-Tests cover business dates, overdue rules, CSV escaping, encrypted persistence, passphrase rejection, tamper detection, session expiry, request-origin checks and local file permissions. CI is configured for Node 24 on Linux, macOS and Windows.
+Tests cover business dates, overdue rules, CSV escaping, encrypted persistence, missing-key recovery, tamper detection, request-origin checks and local file permissions. CI is configured for Node 24 on Linux, macOS and Windows.
 
 ### Structure
 
@@ -78,7 +82,7 @@ Tests cover business dates, overdue rules, CSV escaping, encrypted persistence, 
 - `src/components/ui/` — shadcn/ui primitives, owned in the repository
 - `server/` — loopback HTTP API, validation, encrypted SQLite store and security tests
 - `scripts/dev.mjs` — cross-platform development launcher
-- `data/` — runtime database, excluded from Git
+- `data/` — runtime database and local key, excluded from Git
 
 SQLite stores one encrypted workspace document, updated inside a transaction together with the activity event. This is deliberately scoped to a modest single-user workload; there is no multi-user conflict resolution. Case workflows currently use Malaysian conveyancing stages, MYR and Asia/Kuala_Lumpur business dates.
 

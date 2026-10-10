@@ -38,25 +38,20 @@ async function fixture(t, options = {}) {
     const res = await request("setup", {
       name: "Private firm sentinel 84291",
       sample: true,
-      password: "Test-only secure passphrase 84291",
     });
     assert.equal(res.status, 200);
-    return res.headers.get("set-cookie").split(";")[0];
+    assert.equal(res.headers.get("set-cookie"), null);
   };
   return { dir, origin, request, setup };
 }
-test("unauthenticated, cross-site and rebinding requests cannot read records", async (t) => {
+test("local access needs no login; cross-site and rebinding requests are blocked", async (t) => {
   const f = await fixture(t);
-  assert.equal((await f.request("workspace")).status, 401);
-  const cookie = await f.setup();
-  assert.equal(
-    (await f.request("workspace", undefined, { Cookie: cookie })).status,
-    200,
-  );
+  assert.equal(await (await f.request("workspace")).json(), null);
+  await f.setup();
+  assert.equal((await f.request("workspace", undefined, {})).status, 200);
   assert.equal(
     (
       await f.request("workspace", undefined, {
-        Cookie: cookie,
         Origin: "https://evil.example",
       })
     ).status,
@@ -69,7 +64,6 @@ test("unauthenticated, cross-site and rebinding requests cannot read records", a
         headers: {
           Host: "evil.example",
           "X-CaseTrack-Client": "local",
-          Cookie: cookie,
         },
       },
       (res) => {
@@ -84,22 +78,19 @@ test("unauthenticated, cross-site and rebinding requests cannot read records", a
   assert.equal(
     (
       await f.request("workspace", undefined, {
-        Cookie: cookie,
         "Sec-Fetch-Site": "cross-site",
       })
     ).status,
     403,
   );
   assert.equal(
-    (await fetch(f.origin + "/api/workspace", { headers: { Cookie: cookie } }))
-      .status,
+    (await fetch(f.origin + "/api/workspace", { headers: {} })).status,
     403,
   );
   assert.equal(
     (
       await f.request("setup", {
         name: "overwrite",
-        password: "Test-only secure passphrase 84291",
       })
     ).status,
     409,
@@ -111,43 +102,23 @@ test("unauthenticated, cross-site and rebinding requests cannot read records", a
   );
   assert.equal(page.headers.get("cache-control"), "no-store");
 });
-test("lock invalidates cookies; wrong passwords are rejected and throttled", async (t) => {
-  const f = await fixture(t),
-    cookie = await f.setup();
-  assert.equal((await f.request("lock", {}, { Cookie: cookie })).status, 200);
+test("workspace name is required and local changes need no session", async (t) => {
+  const f = await fixture(t);
+  assert.equal((await f.request("setup", { name: "  " })).status, 400);
+  await f.setup();
+  const w = await (await f.request("workspace")).json();
   assert.equal(
-    (await f.request("workspace", undefined, { Cookie: cookie })).status,
-    401,
+    (await f.request("firm", { ...w.firm, name: "Renamed workspace" })).status,
+    200,
   );
   assert.equal(
-    (await f.request("unlock", { password: "Wrong passphrase for testing" }))
-      .status,
-    400,
+    (await (await f.request("workspace")).json()).firm.name,
+    "Renamed workspace",
   );
-  assert.equal(
-    (
-      await f.request("unlock", {
-        password: "Test-only secure passphrase 84291",
-      })
-    ).status,
-    429,
-  );
+  assert.equal((await f.request("lock", {})).status, 404);
+  assert.equal((await f.request("unlock", {})).status, 404);
 });
-test("session expiry locks the vault without requiring another page request", async (t) => {
-  const f = await fixture(t, { idleMs: 60 }),
-    cookie = await f.setup();
-  await new Promise((r) => setTimeout(r, 100));
-  const res = await f.request("session", undefined, { Cookie: cookie });
-  assert.deepEqual(await res.json(), {
-    initialized: true,
-    authenticated: false,
-  });
-  assert.equal(
-    (await f.request("workspace", undefined, { Cookie: cookie })).status,
-    401,
-  );
-});
-test("database and journals contain ciphertext, not names or passphrases", async (t) => {
+test("database and journals contain ciphertext with private file permissions", async (t) => {
   const f = await fixture(t);
   await f.setup();
   for (const name of readdirSync(f.dir)) {
@@ -158,10 +129,6 @@ test("database and journals contain ciphertext, not names or passphrases", async
       false,
     );
     assert.equal(data.includes(Buffer.from("Ahmad")), false);
-    assert.equal(
-      data.includes(Buffer.from("Test-only secure passphrase")),
-      false,
-    );
     if (process.platform !== "win32")
       assert.equal(statSync(path).mode & 0o077, 0);
   }

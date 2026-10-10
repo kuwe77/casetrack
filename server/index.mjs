@@ -1,5 +1,4 @@
 import { createServer } from "node:http";
-import { randomBytes, createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,58 +23,21 @@ const json = (res, status, data) => {
   });
   res.end(JSON.stringify(data));
 };
-const hash = (value) => createHash("sha256").update(value).digest("hex");
-export function createLocalServer({
-  dataDir,
-  idleMs = 15 * 60 * 1000,
-  devPort = null,
-}) {
+export function createLocalServer({ dataDir, devPort = null }) {
   const store = openStore(resolve(dataDir, "casetrack.sqlite"));
-  let session = null,
-    authBusy = false,
-    nextAttempt = 0,
-    failures = 0;
-  const lock = () => {
-    session = null;
-    store.lock();
-  };
-  const expire = () => {
-    if (session && Date.now() >= session.expires) lock();
-  };
-  const timer = setInterval(expire, 1000);
-  timer.unref();
-  const cookieName = "casetrack_session";
-  const cookie = (value) =>
-    `${cookieName}=${value}; HttpOnly; SameSite=Strict; Path=/api`;
-  const authenticate = (req) => {
-    expire();
-    const token = req.headers.cookie
-      ?.split(";")
-      .map((x) => x.trim())
-      .find((x) => x.startsWith(cookieName + "="))
-      ?.slice(cookieName.length + 1);
-    return Boolean(
-      token && token.length === 64 && session && hash(token) === session.hash,
-    );
-  };
-  const openSession = (res) => {
-    const token = randomBytes(32).toString("hex");
-    session = { hash: hash(token), expires: Date.now() + idleMs };
-    res.setHeader("Set-Cookie", cookie(token));
-  };
   async function body(req, limit) {
     if (!req.headers["content-type"]?.startsWith("application/json"))
       throw Object.assign(Error("JSON required."), { status: 415 });
-    let value = "";
+    const chunks = [];
     let size = 0;
     for await (const chunk of req) {
       size += chunk.length;
       if (size > limit)
         throw Object.assign(Error("Record is too large."), { status: 413 });
-      value += chunk;
+      chunks.push(chunk);
     }
     try {
-      return JSON.parse(value);
+      return JSON.parse(Buffer.concat(chunks).toString("utf8"));
     } catch {
       throw Object.assign(Error("Invalid JSON."), { status: 400 });
     }
@@ -113,61 +75,21 @@ export function createLocalServer({
           return json(res, 403, {
             error: "Request must come from the local dashboard.",
           });
-        const authorized = authenticate(req);
-        if (path === "/api/session" && req.method === "GET")
-          return json(res, 200, {
-            initialized: store.initialized(),
-            authenticated: authorized,
-          });
-        if (
-          ["/api/setup", "/api/unlock"].includes(path) &&
-          req.method === "POST"
-        ) {
-          if (authBusy || Date.now() < nextAttempt) {
-            res.setHeader(
-              "Retry-After",
-              String(Math.max(1, Math.ceil((nextAttempt - Date.now()) / 1000))),
-            );
-            return json(res, 429, {
-              error: "Please wait before trying again.",
-            });
-          }
-          authBusy = true;
+        if (path === "/api/setup" && req.method === "POST") {
+          if (store.initialized())
+            return json(res, 409, { error: "A workspace already exists." });
+          const payload = await body(req, 8192);
           try {
-            const payload = await body(req, 8192);
-            if (path === "/api/setup") {
-              if (store.initialized())
-                return json(res, 409, { error: "A workspace already exists." });
-              await store.setup(payload);
-            } else await store.unlock(payload?.password);
-            failures = 0;
-            nextAttempt = 0;
-            openSession(res);
+            await store.setup(payload);
             return json(res, 200, { ok: true });
-          } catch {
-            failures++;
-            nextAttempt =
-              Date.now() +
-              Math.min(60000, 1000 * 2 ** Math.min(failures - 1, 6));
+          } catch (e) {
             return json(res, 400, {
               error:
-                path === "/api/setup"
-                  ? "Could not create workspace. Enter a name and a passphrase of at least 14 characters."
-                  : "Incorrect passphrase or damaged database.",
+                e.name === "ZodError"
+                  ? "Enter a workspace name (1–150 characters)."
+                  : e.message,
             });
-          } finally {
-            authBusy = false;
           }
-        }
-        if (!authorized)
-          return json(res, 401, {
-            error: "Workspace locked. Unlock it to continue.",
-          });
-        session.expires = Date.now() + idleMs;
-        if (path === "/api/lock" && req.method === "POST") {
-          lock();
-          res.setHeader("Set-Cookie", cookie("") + "; Max-Age=0");
-          return json(res, 200, { ok: true });
         }
         if (path === "/api/workspace" && req.method === "GET")
           return json(res, 200, store.read());
@@ -178,11 +100,6 @@ export function createLocalServer({
         )
           return json(res, 404, { error: "Unknown operation." });
         const payload = await body(req, 128 * 1024);
-        // Authorization can expire or be revoked while a request body is arriving.
-        if (!authenticate(req))
-          return json(res, 401, {
-            error: "Workspace locked. Unlock it to continue.",
-          });
         try {
           return json(res, 200, store.mutate(route, payload));
         } catch (e) {
@@ -219,7 +136,6 @@ export function createLocalServer({
   server.requestTimeout = 15000;
   server.headersTimeout = 10000;
   server.on("close", () => {
-    clearInterval(timer);
     store.close();
   });
   return server;
