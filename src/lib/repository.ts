@@ -16,7 +16,6 @@ export async function localApi<T = unknown>(
   if (!res.headers.get("content-type")?.includes("application/json"))
     throw Error("Start CaseTrack with npm start or npm run dev.");
   const result = await res.json();
-  if (res.status === 401) window.dispatchEvent(new Event("casetrack:locked"));
   if (!res.ok) throw Error(result.error || "Could not complete request.");
   return result;
 }
