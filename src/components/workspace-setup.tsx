@@ -1,10 +1,5 @@
-import { useState, type FormEvent } from "react";
-import {
-  FolderKanban,
-  ArrowRight,
-  LoaderCircle,
-  HardDrive,
-} from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { FolderKanban } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   Card,
@@ -14,20 +9,46 @@ import {
   CardTitle,
 } from "./ui/card";
 import { Input } from "./ui/input";
-import { localApi, errorMessage } from "../lib/repository";
+import { rpc, errorMessage } from "../lib/repository";
+import { SignOut } from "./auth-gate";
+interface Invitation {
+  id: string;
+  workspace_name: string;
+  expires_at: string;
+}
 export function WorkspaceSetup({ onReady }: { onReady: () => void }) {
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  async function submit(e: FormEvent<HTMLFormElement>) {
+    [error, setError] = useState(""),
+    [invitations, setInvitations] = useState<Invitation[]>([]);
+  async function refresh() {
+    try {
+      setInvitations(await rpc<Invitation[]>("pending_invitations"));
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
+  useEffect(() => {
+    void refresh();
+  }, []);
+  async function create(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const data = new FormData(e.currentTarget);
+    const form = new FormData(e.currentTarget);
     setBusy(true);
     setError("");
     try {
-      await localApi("setup", {
-        name: data.get("name"),
-        sample: data.get("sample") === "on",
-      });
+      await rpc("create_workspace", { workspace_name: form.get("name") });
+      onReady();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function join(id: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await rpc("accept_invitation", { invitation_id: id });
       onReady();
     } catch (e) {
       setError(errorMessage(e));
@@ -38,57 +59,60 @@ export function WorkspaceSetup({ onReady }: { onReady: () => void }) {
   return (
     <main className="vault-screen">
       <a className="vault-brand" href="#">
-        <FolderKanban size={24} />
-        CaseTrack <span>Local workspace</span>
+        <FolderKanban />
+        CaseTrack <span>Workspace setup</span>
       </a>
       <Card className="vault-card">
         <CardHeader>
-          <div className="vault-icon">
-            <FolderKanban size={24} />
-          </div>
-          <CardTitle>Name your workspace</CardTitle>
+          <CardTitle>
+            {invitations.length
+              ? "Your workspace invitations"
+              : "Name your workspace"}
+          </CardTitle>
           <CardDescription>
-            Give your workspace a name to get started. You can change it later
-            in Settings.
+            Join your firm’s invitation, or create a new workspace. Each account
+            belongs to one workspace.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={submit} className="vault-form">
+          {invitations.map((i) => (
+            <div className="invitation-row" key={i.id}>
+              <strong>{i.workspace_name}</strong>
+              <Button disabled={busy} onClick={() => join(i.id)}>
+                Join workspace
+              </Button>
+            </div>
+          ))}
+          <form onSubmit={create} className="vault-form">
             <label>
-              Workspace name
+              New workspace name
               <Input
                 name="name"
                 required
                 maxLength={150}
                 placeholder="Your firm or practice"
                 autoComplete="organization"
-                autoFocus
               />
-            </label>
-            <label className="sample-choice">
-              <input name="sample" type="checkbox" />
-              Include fictional sample cases
             </label>
             {error && (
               <p className="form-error" role="alert">
                 {error}
               </p>
             )}
-            <Button type="submit" disabled={busy}>
-              {busy ? (
-                <LoaderCircle className="animate-spin" />
-              ) : (
-                <ArrowRight />
-              )}
-              {busy ? "Creating…" : "Create workspace"}
+            <Button disabled={busy}>
+              {busy ? "Please wait…" : "Create workspace"}
             </Button>
           </form>
+          <p className="vault-help">
+            Expecting an invitation? Ask your workspace owner to invite this
+            email before creating a new workspace.
+          </p>
+          <Button variant="ghost" disabled={busy} onClick={refresh}>
+            Refresh invitations
+          </Button>
         </CardContent>
       </Card>
-      <p className="vault-footnote">
-        <HardDrive size={15} />
-        Stored on this computer · No sign-in required
-      </p>
+      <SignOut />
     </main>
   );
 }

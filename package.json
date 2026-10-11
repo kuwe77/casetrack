@@ -1,18 +1,20 @@
 {
   "name": "casetrack",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/dev.mjs",
+    "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
-    "preview": "node server/index.mjs",
-    "test": "vitest run src && node --test server/*.test.mjs",
-    "start": "node server/index.mjs"
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "test": "vitest run src",
+    "start": "vite preview --host 127.0.0.1 --port 4173",
+    "test:database": "node scripts/test-database.mjs"
   },
   "dependencies": {
     "@fontsource/geist": "^5.3.0",
     "@phosphor-icons/react": "^2.1.10",
+    "@supabase/supabase-js": "^2.117.3",
     "@tailwindcss/vite": "^4.3.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -26,16 +28,19 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/node": "^26.6.4",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.4",
+    "jsdom": "^30.1.2",
     "typescript": "~5.9.3",
     "vite": "^7.1.9",
     "vitest": "^5.0.3"
   },
   "license": "MIT",
-  "description": "Local-first conveyancing case management. No cloud account required.",
+  "description": "Open-source conveyancing case management for Vercel and Supabase.",
   "engines": {
     "node": ">=24.0.0"
   },

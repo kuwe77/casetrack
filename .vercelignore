@@ -1,0 +1,9 @@
+data
+.env*
+work
+server
+supabase
+.git
+*.sqlite*
+*.key
+scripts/reset-password.mjs

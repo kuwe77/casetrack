@@ -74,6 +74,9 @@ import {
   TextLink,
 } from "./components/ui";
 import { Editor } from "./components/forms";
+import { AccountSecurity } from "./components/account-security";
+import { SignOut } from "./components/auth-gate";
+import { WorkspaceTeam } from "./components/workspace-team";
 import { WorkspaceSetup } from "./components/workspace-setup";
 import { FolderKanban, Sun, Moon } from "lucide-react";
 import { Button } from "./components/ui/button";
@@ -119,6 +122,15 @@ export function App() {
   }, []);
   useEffect(() => {
     void reload().catch(() => {});
+    const refresh = () => {
+      if (document.visibilityState === "visible") void reload().catch(() => {});
+    };
+    const timer = setInterval(refresh, 60000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
   }, [reload]);
   if (error && !workspace)
     return (
@@ -134,6 +146,7 @@ export function App() {
         >
           Try again
         </Button>
+        <SignOut />
       </div>
     );
   if (loading)
@@ -338,7 +351,7 @@ function Dashboard({
             <span>
               Private by default
               <br />
-              Open source, on your computer.
+              Private to your workspace.
             </span>
           </div>
           <Button
@@ -353,7 +366,7 @@ function Dashboard({
             <Avatar name="Workspace Admin" color="lime" />
             <span>
               <strong>Workspace admin</strong>
-              <small>Encrypted workspace</small>
+              <small>Signed-in workspace</small>
             </span>
           </div>
         </div>
@@ -397,6 +410,7 @@ function Dashboard({
             <strong>{currentLabel}</strong>
           </div>
           <div className="topbar-actions">
+            <SignOut />
             <Button
               variant="ghost"
               className="global-search"
@@ -654,7 +668,7 @@ function Dashboard({
               </Card>
               <div className="page-footnote">
                 <span className="foot-brand">casetrack.</span>
-                <span>Open source · Local first</span>
+                <span>Open source · Your workspace</span>
                 <span>Malaysia · MYR</span>
               </div>
             </>
@@ -1752,34 +1766,33 @@ function SettingsPage({
               {busy ? "Saving…" : "Save changes"}
             </Button>
           </form>
+          <WorkspaceTeam />
         </Card>
         <div className="settings-side">
+          <AccountSecurity />
           <Card className="panel connection-panel">
             <span className="connection-icon">
               <ShieldCheck size={27} />
             </span>
-            <h2>Encrypted local workspace</h2>
+            <h2>Private cloud workspace</h2>
             <p>
-              Records are encrypted before they reach the database. The
-              encryption key is stored locally on this computer.
+              Records are stored in your Supabase project. Database access rules
+              restrict them to signed-in workspace members.
             </p>
             <span className="connection-status live">
-              <i /> AES-256-GCM encryption
+              <i /> Supabase connected
             </span>
             <p className="connection-note">
-              No sign-in is required. Anyone who can use this computer can open
-              the workspace. Protect your OS account and backups.
+              Your deployment owner controls the database and backups. Members
+              share access to all records in this workspace.
             </p>
           </Card>
           <section className="settings-export">
-            <h3>Local backups</h3>
+            <h3>Database backups</h3>
             <p>
-              Stop CaseTrack, then copy the entire data folder to a safe
-              location. Restore it with the app stopped. Include workspace.key:
-              the database cannot be opened without its original key. Keep the
-              backup private because it contains both the records and key.
+              Configure backups in your Supabase project and verify restoration
+              regularly. CSV exports are not a complete workspace backup.
             </p>
-            <code>data/casetrack.sqlite</code>
           </section>
           <section className="settings-export">
             <h3>Export your records</h3>
