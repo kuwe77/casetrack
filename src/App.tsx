@@ -76,6 +76,7 @@ import {
 import { Editor } from "./components/forms";
 import { AccountSecurity } from "./components/account-security";
 import { SignOut } from "./components/auth-gate";
+import { WhatsAppPage } from "./components/whatsapp-page";
 import { WorkspaceTeam } from "./components/workspace-team";
 import { WorkspaceSetup } from "./components/workspace-setup";
 import { FolderKanban, Sun, Moon } from "lucide-react";
@@ -93,7 +94,13 @@ import { Input } from "./components/ui/input";
 import { Textarea } from "./components/ui/textarea";
 
 type Page =
-  "overview" | "cases" | "followups" | "agents" | "activity" | "settings";
+  | "overview"
+  | "cases"
+  | "followups"
+  | "agents"
+  | "activity"
+  | "settings"
+  | "whatsapp";
 type Edit = {
   kind: "case" | "agent" | "task";
   existing?: CaseRecord | Agent | FollowUp;
@@ -104,6 +111,7 @@ const navigation = [
   { id: "followups", label: "Follow-ups", icon: CheckSquare },
   { id: "agents", label: "Agents", icon: UsersThree },
   { id: "activity", label: "Activity", icon: ClockCounterClockwise },
+  { id: "whatsapp", label: "WhatsApp", icon: ChatTeardropText },
 ] as const;
 export function App() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -187,6 +195,7 @@ function Dashboard({
       "agents",
       "activity",
       "settings",
+      "whatsapp",
     ].includes(h)
       ? (h as Page)
       : "overview";
@@ -244,6 +253,7 @@ function Dashboard({
           "agents",
           "activity",
           "settings",
+          "whatsapp",
         ].includes(h)
       )
         setPage(h as Page);
@@ -702,6 +712,7 @@ function Dashboard({
             />
           )}
           {page === "activity" && <ActivityPage w={w} onCase={setSelectedId} />}
+          {page === "whatsapp" && <WhatsAppPage w={w} />}
           {page === "settings" && (
             <SettingsPage
               w={w}

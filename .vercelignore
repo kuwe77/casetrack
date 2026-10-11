@@ -7,3 +7,4 @@ supabase
 *.sqlite*
 *.key
 scripts/reset-password.mjs
+worker

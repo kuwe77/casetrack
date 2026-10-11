@@ -1,0 +1,17 @@
+[Unit]
+Description=CaseTrack WhatsApp polling worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/casetrack
+EnvironmentFile=%h/.config/casetrack/worker.env
+ExecStart=/usr/bin/env node worker/index.mjs
+Restart=on-failure
+RestartSec=30
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

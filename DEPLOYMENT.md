@@ -1,11 +1,11 @@
 # Deploy CaseTrack with Vercel + Supabase
 
-Each installation uses its own Vercel project and Supabase project. The app has no shared vendor backend, bot, paid API, or SMTP dependency. Accounts use email/password and are provisioned by the deployment administrator. Do not use the old local-only build on the internet.
+Each installation uses its own Vercel project and Supabase project. The core dashboard has no shared vendor backend or SMTP dependency. The optional [WhatsApp integration](WHATSAPP.md) additionally uses Zernio, Hermes and an always-on worker. Accounts use email/password and are provisioned by the deployment administrator. Do not use the old local-only build on the internet.
 
 ## 1. Create and prepare Supabase
 
 1. Create a **new** project at [Supabase](https://supabase.com/dashboard). Choose the appropriate region for your records. Save the database password privately; CaseTrack does not need it in the browser or Vercel.
-2. Open SQL Editor. Paste and run the whole [initial migration](supabase/migrations/202610110001_workspace.sql) **once**. It creates the tables, row-level policies, owner/member permissions and audit triggers. It inserts no sample data. Do not run `supabase/tests/*` in your project.
+2. Open SQL Editor. Paste and run the whole [initial migration](supabase/migrations/202610110001_workspace.sql) **once**. It creates the tables, row-level policies, owner/member permissions and audit triggers. It inserts no sample data. Then run the [WhatsApp migration](supabase/migrations/202610110002_whatsapp.sql) once. Do not run `supabase/tests/*` in your project.
 3. In Authentication → Sign In / Providers, enable **Email/password**, disable **Allow new users to sign up**, and keep **Confirm email** enabled. Provision confirmed users as described below. Disable anonymous sign-ins and unused providers. Configure a strong minimum password length (at least 12) in the Email provider settings.
 4. In the project's Connect dialog, copy the **Project URL** and **publishable key** (`sb_publishable_…`). Do not use an `sb_secret_…` key, legacy `service_role` key, or database password.
 
@@ -66,7 +66,7 @@ Use the existing user's UUID from Supabase Authentication → Users. This change
 - Invite a test colleague, join, and confirm both accounts see the same workspace.
 - Create a second test owner/workspace: it must not see the first workspace's records.
 - Remove the colleague and confirm they can no longer read or change the first workspace.
-- Confirm all seven public app tables have RLS enabled in Supabase. Check the Security Advisor.
+- Confirm all eleven public app tables have RLS enabled in Supabase. Check the Security Advisor.
 - Configure and test your backup/restore procedure before storing confidential records. Available managed backup features depend on your Supabase plan; exports from CaseTrack are CSV case lists, not full backups.
 
 The repository's PostgreSQL tests verify the SQL authorization rules using simulated Auth identities. They do not replace this acceptance check against your actual Supabase Auth, Data API and Vercel deployment.

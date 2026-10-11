@@ -15,7 +15,9 @@ if (
 for (const file of [
   "supabase/tests/bootstrap.sql",
   "supabase/migrations/202610110001_workspace.sql",
+  "supabase/migrations/202610110002_whatsapp.sql",
   "supabase/tests/isolation.sql",
+  "supabase/tests/whatsapp.sql",
 ]) {
   const run = spawnSync(
     "psql",

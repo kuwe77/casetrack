@@ -1,7 +1,7 @@
 {
   "name": "casetrack",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -9,7 +9,10 @@
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "test": "vitest run src",
     "start": "vite preview --host 127.0.0.1 --port 4173",
-    "test:database": "node scripts/test-database.mjs"
+    "test:database": "node scripts/test-database.mjs",
+    "test:worker": "node --test worker/*.test.mjs",
+    "whatsapp:worker": "node worker/index.mjs",
+    "whatsapp:doctor": "node worker/index.mjs --doctor"
   },
   "dependencies": {
     "@fontsource/geist": "^5.3.0",

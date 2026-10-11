@@ -31,3 +31,7 @@ PostgreSQL tests exercise anonymous denial, cross-workspace reads/writes, member
 ## Report a vulnerability
 
 Use [GitHub private vulnerability reporting](https://github.com/kuwe77/casetrack/security/advisories/new). Never post records, passwords, access tokens, keys or database files publicly. Include the affected version and reproduction using fictional records. If private reporting is unavailable, request a private contact without exploit details. Reports are handled on a best-effort basis.
+
+## Optional WhatsApp worker
+
+See [WHATSAPP.md](WHATSAPP.md) for the worker boundary. Owner-approved exact phone mappings plus current case assignments gate disclosure; the model receives references only and cannot send messages or execute tools. Worker tokens are hashed, workspace-scoped capabilities; they must be kept private. Zernio credentials stay on the worker machine, never the frontend or repository. Final authorization is rechecked before sends, with a documented in-flight race boundary. Outgoing message previews contain externally approved case information and are restricted to workspace owners. Provider/model failures fail closed. The existing core dashboard and this integration have not received an independent security audit.

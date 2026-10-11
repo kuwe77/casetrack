@@ -1582,3 +1582,167 @@ button.stat:hover {
     align-items: stretch;
   }
 }
+
+/* WhatsApp operations reuse the workspace's restrained card and form vocabulary. */
+.wa-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 20px;
+}
+.wa-card {
+  padding: 24px;
+  margin-bottom: 20px;
+  gap: 16px;
+}
+.wa-card h2 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.wa-card p,
+.wa-muted,
+.wa-card small {
+  font-size: 13px;
+  color: var(--muted-foreground);
+  line-height: 1.65;
+}
+.wa-title,
+.wa-event-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.wa-state {
+  font-size: 11px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  margin-left: auto;
+  text-transform: capitalize;
+}
+.wa-form {
+  display: grid;
+  gap: 16px;
+}
+.wa-form > button {
+  justify-self: start;
+}
+.wa-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+}
+.wa-check input {
+  accent-color: #24815a;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+.wa-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+}
+.wa-contact {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 18px 0;
+  border-top: 1px solid var(--border);
+}
+.wa-contact > div {
+  min-width: 155px;
+}
+.wa-contact small {
+  display: block;
+}
+.wa-contact .field {
+  flex: 1;
+  min-width: 180px;
+}
+.wa-rule {
+  border-top: 1px solid var(--border);
+  padding: 15px 0;
+}
+.wa-rule summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+.wa-rule summary span {
+  float: right;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.wa-rule form {
+  margin-top: 20px;
+}
+.wa-policy {
+  display: flex;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.wa-policy svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.wa-token {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.wa-token .field {
+  flex: 1;
+  min-width: 180px;
+}
+.wa-steps {
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--muted-foreground);
+}
+.wa-events article {
+  padding: 18px 0;
+  border-top: 1px solid var(--border);
+}
+.wa-response {
+  white-space: pre-wrap;
+  margin-top: 12px;
+}
+.wa-notice {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+@media (max-width: 850px) {
+  .wa-layout {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .wa-card {
+    padding: 18px;
+  }
+  .wa-contact {
+    align-items: flex-start;
+  }
+  .wa-contact > div {
+    width: 100%;
+  }
+}
+.wa-card {
+  border-color: var(--border);
+}
+.wa-card [data-slot="button"][data-variant="default"] {
+  color: var(--primary-foreground);
+}
+.wa-card [data-slot="button"][data-variant="outline"],
+.wa-refresh {
+  border-color: var(--border);
+}

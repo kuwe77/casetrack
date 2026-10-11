@@ -2,11 +2,11 @@
 
 **Open-source conveyancing case management, deployed on your own Vercel and Supabase projects.**
 
-Track cases, property-agent contacts, milestones, follow-ups, internal notes and activity in a shadcn/ui dashboard. Each firm has a private workspace with owner-managed membership. There is no AI bot.
+Track cases, property-agent contacts, milestones, follow-ups, internal notes and activity in a shadcn/ui dashboard. Each firm has a private workspace with owner-managed membership. An optional WhatsApp worker uses Hermes to interpret property-agent inquiries and returns only authorized case facts.
 
 ## Deploy your own copy
 
-1. Create a Supabase project and run the supplied database migration.
+1. Create a Supabase project and run the supplied database migrations in filename order.
 2. Deploy to Vercel with your Supabase URL and publishable key.
 3. Create a confirmed email/password account in Supabase, sign in, and name your workspace.
 
@@ -14,7 +14,7 @@ Track cases, property-agent contacts, milestones, follow-ups, internal notes and
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fkuwe77%2Fcasetrack&env=VITE_SUPABASE_URL,VITE_SUPABASE_PUBLISHABLE_KEY&envDescription=Use%20your%20Supabase%20Project%20URL%20and%20publishable%20key.&envLink=https%3A%2F%2Fgithub.com%2Fkuwe77%2Fcasetrack%2Fblob%2Fmain%2FDEPLOYMENT.md&project-name=casetrack&repository-name=casetrack)
 
-Only Vercel and Supabase are required. Account provisioning is managed by the deployment administrator; sign-in uses email/password, so no SMTP/email provider is needed. The deployment button does not create the Supabase schema or accounts for you—complete the guide first.
+The core dashboard requires only Vercel and Supabase. The optional WhatsApp integration additionally needs Zernio, Hermes and an always-on polling worker. Account provisioning is managed by the deployment administrator; sign-in uses email/password, so no SMTP/email provider is needed. The deployment button does not create the Supabase schema or accounts for you—complete the guide first.
 
 ## Features
 
@@ -24,6 +24,7 @@ Only Vercel and Supabase are required. Account provisioning is managed by the de
 - Workspace creation, owner/member permissions, email-address invitations and membership removal.
 - Email/password sign-in, sign-out and signed-in password changes.
 - CSV export and light/dark themes, with desktop and mobile navigation.
+- Optional [WhatsApp polling, agent-scoped progress replies and configurable follow-ups](WHATSAPP.md).
 
 “Agents” are property contacts. The interface uses Malaysian conveyancing stages, MYR and Asia/Kuala_Lumpur business dates. Each account belongs to one workspace; members share the workspace's records.
 
