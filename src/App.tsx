@@ -75,6 +75,8 @@ import {
 } from "./components/ui";
 import { Editor } from "./components/forms";
 import { AccountSecurity } from "./components/account-security";
+import { ApiAccess } from "./components/api-access";
+import { CaseDocuments } from "./components/case-documents";
 import { SignOut } from "./components/auth-gate";
 import { WhatsAppPage } from "./components/whatsapp-page";
 import { WorkspaceTeam } from "./components/workspace-team";
@@ -1778,6 +1780,7 @@ function SettingsPage({
             </Button>
           </form>
           <WorkspaceTeam />
+          <ApiAccess />
         </Card>
         <div className="settings-side">
           <AccountSecurity />
@@ -1787,11 +1790,11 @@ function SettingsPage({
             </span>
             <h2>Private cloud workspace</h2>
             <p>
-              Records are stored in your Supabase project. Database access rules
-              restrict them to signed-in workspace members.
+              Records are stored in Cloudflare D1. Every request is checked
+              against your firm membership and API permissions.
             </p>
             <span className="connection-status live">
-              <i /> Supabase connected
+              <i /> Cloudflare workspace
             </span>
             <p className="connection-note">
               Your deployment owner controls the database and backups. Members
@@ -1801,7 +1804,7 @@ function SettingsPage({
           <section className="settings-export">
             <h3>Database backups</h3>
             <p>
-              Configure backups in your Supabase project and verify restoration
+              Your deployment administrator manages Cloudflare D1 backups. Verify restoration
               regularly. CSV exports are not a complete workspace backup.
             </p>
           </section>
@@ -1950,6 +1953,7 @@ function CaseDetail({
               <strong>{dateLabel(c.created_at, true)}</strong>
             </div>
           </div>
+          <CaseDocuments caseId={c.id} />
           <form className="progress-form" onSubmit={progress}>
             <div className="section-heading">
               <h3>Move the matter forward</h3>

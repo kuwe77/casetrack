@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { client } from "../lib/supabase";
-import { rpc, errorMessage } from "../lib/repository";
+import { api, send } from "../lib/api";
+import { errorMessage } from "../lib/repository";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 interface Member {
@@ -22,25 +22,8 @@ export function WorkspaceTeam() {
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
   async function refresh() {
-    const [
-      {
-        data: { user },
-      },
-      m,
-      i,
-    ] = await Promise.all([
-      client().auth.getUser(),
-      client().from("workspace_members").select("user_id,email,role"),
-      client().from("workspace_invites").select("id,email,expires_at"),
-    ]);
-    if (m.error) throw m.error;
-    if (i.error) throw i.error;
-    setMembers(m.data || []);
-    setInvites(i.data || []);
-    setOwner(
-      m.data?.some((m) => m.user_id === user?.id && m.role === "owner") ||
-        false,
-    );
+    const result = await api<{ members: Member[]; invites: Invite[]; owner: boolean }>("/team");
+    setMembers(result.members); setInvites(result.invites); setOwner(result.owner);
   }
   useEffect(() => {
     void refresh().catch((e) => setError(errorMessage(e)));
@@ -50,7 +33,10 @@ export function WorkspaceTeam() {
     setError("");
     setMessage("");
     try {
-      await rpc(name, args);
+      if (name === "invite_member") {
+        const result = await send<{ url: string }>("/invitations", { email: args.invitee_email });
+        setMessage(result.url);
+      } else await api(name === "remove_member" ? `/team/${args.member_id}` : `/invitations/${args.invitation_id}`, { method: "DELETE" });
       await refresh();
       return true;
     } catch (e) {
@@ -63,9 +49,6 @@ export function WorkspaceTeam() {
   async function invite(e: FormEvent) {
     e.preventDefault();
     if (await action("invite_member", { invitee_email: email })) {
-      setMessage(
-        "Invitation saved. Share this app’s URL with your colleague; sign in with the invited email and select Join workspace. No invitation email is sent automatically.",
-      );
       setEmail("");
     }
   }
@@ -113,9 +96,8 @@ export function WorkspaceTeam() {
             <Button disabled={busy}>Invite member</Button>
           </form>
           <p className="vault-help">
-            Create their confirmed account in Supabase first. Invitations expire
-            after 7 days. Share the app URL yourself; this action does not send
-            an email.
+            Share the private invitation link with your colleague. They can register
+            themselves with the invited email. Links expire after 7 days.
           </p>
           {invites.map((i) => (
             <div className="team-row" key={i.id}>
@@ -146,7 +128,7 @@ export function WorkspaceTeam() {
       )}
       {message && (
         <p role="status" className="vault-help">
-          {message}
+          Invitation link (shown once): <a href={message}>{message}</a>
         </p>
       )}
     </section>

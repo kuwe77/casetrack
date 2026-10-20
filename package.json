@@ -5,22 +5,25 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && tsc -p tsconfig.worker.json && vite build && node scripts/build-worker.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
-    "test": "vitest run src",
+    "test": "vitest run src tests",
     "start": "vite preview --host 127.0.0.1 --port 4173",
-    "test:database": "node scripts/test-database.mjs",
-    "test:worker": "node --test worker/*.test.mjs",
-    "whatsapp:worker": "node worker/index.mjs",
-    "whatsapp:doctor": "node worker/index.mjs --doctor"
+    "dev:api": "wrangler pages dev dist --port 8788",
+    "db:local": "wrangler d1 migrations apply casetrack --local",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name casetrack",
+    "test:integration": "node scripts/test-cloudflare.mjs",
+    "dev:scheduler": "wrangler dev --config wrangler.scheduler.jsonc --port 8789 --test-scheduled",
+    "deploy:scheduler": "wrangler deploy --config wrangler.scheduler.jsonc"
   },
   "dependencies": {
     "@fontsource/geist": "^5.3.0",
     "@phosphor-icons/react": "^2.1.10",
-    "@supabase/supabase-js": "^2.117.3",
     "@tailwindcss/vite": "^4.3.3",
+    "better-auth": "^1.7.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "hono": "^4.13.13",
     "lucide-react": "^1.54.0",
     "radix-ui": "^1.7.0",
     "react": "^19.1.1",
@@ -31,6 +34,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261019.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/node": "^26.6.4",
@@ -40,10 +44,11 @@
     "jsdom": "^30.1.2",
     "typescript": "~5.9.3",
     "vite": "^7.1.9",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "wrangler": "^4.151.2"
   },
   "license": "MIT",
-  "description": "Open-source conveyancing case management for Vercel and Supabase.",
+  "description": "Conveyancing case management with private firm workspaces and an agent API on Cloudflare.",
   "engines": {
     "node": ">=24.0.0"
   },

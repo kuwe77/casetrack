@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CaseTrack · Agent API</title><style>
+*{box-sizing:border-box}body{margin:0;background:#fafbf8;color:#1d302a;font:16px/1.65 system-ui,sans-serif}main{max-width:980px;margin:auto;padding:56px 24px}a{color:#236a50}h1{font-size:48px;letter-spacing:-2px;line-height:1.1}h2{margin-top:48px;font-size:25px;letter-spacing:-.7px}p{max-width:78ch;color:#46554e}pre{background:#1d302a;color:#edf6ef;padding:22px;border-radius:12px;overflow:auto;font-size:13px}code{overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid #d9e2da}th{color:#567065}.scroll{overflow:auto}.note{border-left:3px solid #51846b;padding-left:18px}nav{display:flex;gap:24px;flex-wrap:wrap}footer{margin-top:60px;padding-top:24px;border-top:1px solid #d9e2da}
+</style></head><body><main>
+<nav><a href="/">CaseTrack</a><a href="/app">Open workspace</a><a href="/api/openapi.json">OpenAPI specification</a></nav>
+<h1>Your firm. Your agent.</h1><p>Use scoped API keys to connect your own AI agent, automation or integration. Each key can access only the firm of its issuing member. Requests use the same origin as this website, followed by <code>/api/v1</code>.</p>
+<h2>Connect</h2><ol><li>Sign in and create or join your firm's workspace.</li><li>In Settings → API access, create a named key with only the permissions the agent needs.</li><li>Copy the key once into your agent's secret storage. Set its expiry and revoke it when no longer needed.</li><li>Send HTTPS requests with <code>Authorization: Bearer ct_…</code>.</li></ol>
+<pre>curl "https://YOUR-PROJECT.pages.dev/api/v1/cases?limit=100" \
+  -H "Authorization: Bearer $CASETRACK_API_KEY"
+
+curl -X PATCH "https://YOUR-PROJECT.pages.dev/api/v1/cases/CASE_UUID" \
+  -H "Authorization: Bearer $CASETRACK_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data '{"status":"spa","next_step":"Confirm signing appointment"}'</pre>
+<p class="note">Never put a key in a URL, browser bundle, public repository or chat message. API keys cannot create other keys, change members, recover accounts or read provider credentials. Removing the issuing member revokes their API access.</p>
+<h2>Records and permissions</h2><div class="scroll"><table><thead><tr><th>Endpoint</th><th>Methods</th><th>Scope</th></tr></thead><tbody>
+<tr><td><code>/me</code></td><td>GET identity and granted scopes</td><td>Any valid key</td></tr>
+<tr><td><code>/workspace</code>, <code>/team</code></td><td>GET firm and members</td><td><code>workspace:read</code></td></tr>
+<tr><td><code>/cases</code>, <code>/cases/{id}</code></td><td>List/create; read/update</td><td><code>cases:read</code>, <code>cases:write</code></td></tr>
+<tr><td><code>/agents</code>, <code>/agents/{id}</code></td><td>List/create; read/update</td><td><code>agents:read</code>, <code>agents:write</code></td></tr>
+<tr><td><code>/tasks</code>, <code>/tasks/{id}</code></td><td>List/create; read/update</td><td><code>tasks:read</code>, <code>tasks:write</code></td></tr>
+<tr><td><code>/activities</code></td><td>GET</td><td><code>activities:read</code></td></tr>
+<tr><td><code>/cases/{id}/notes</code></td><td>POST</td><td><code>notes:write</code></td></tr>
+<tr><td><code>/documents</code>, <code>/documents/{id}/download</code></td><td>GET</td><td><code>documents:read</code></td></tr>
+<tr><td><code>/cases/{id}/documents</code></td><td>POST multipart upload</td><td><code>documents:write</code></td></tr>
+<tr><td><code>/whatsapp/messages</code></td><td>GET / POST</td><td><code>whatsapp:read</code> / <code>whatsapp:write</code></td></tr>
+<tr><td><code>/whatsapp/connection</code>, <code>/whatsapp/contacts</code></td><td>GET status and approved recipients</td><td><code>whatsapp:read</code></td></tr>
+<tr><td><code>/whatsapp/conversations</code>, <code>/whatsapp/conversations/{id}/messages</code></td><td>GET connected Zernio inbox/history</td><td><code>whatsapp:read</code></td></tr>
+<tr><td><code>/whatsapp/rules</code>, <code>/whatsapp/rules/{caseId}</code></td><td>GET / PUT</td><td><code>whatsapp:read</code> / <code>whatsapp:write</code></td></tr>
+</tbody></table></div>
+<p>Record collections support GET and POST. Individual records support GET and PATCH. PATCH changes only supplied writable fields; <code>firm_id</code>, timestamps and ownership are server-controlled. Record writes and notes are audited. Deletion is not exposed by this API.</p>
+<p>Lists return <code>{"data":[…],"nextCursor":"…"}</code>. Repeat with <code>?cursor=NEXT_CURSOR</code> until <code>nextCursor</code> is null. Cases, agents and tasks accept <code>limit</code> (1–200, default 100); the local message log and document list return up to 100. Record order is UUID order, not chronological. Sort timestamps when needed. WhatsApp rules and contacts return arrays; workspace, team and connection endpoints return objects. Connected Zernio inbox pagination is described below.</p>
+<h2>Write fields</h2><p><strong>Cases:</strong> required <code>ref</code> and <code>buyer</code>; optional <code>seller</code>, <code>property</code>, <code>type</code>, <code>status</code>, <code>priority</code>, <code>agent_id</code>, <code>owner</code>, <code>due_date</code>, <code>next_step</code>, <code>notes</code>, <code>value</code>. Reference is unique within the firm. Use an agent ID from the same firm.</p>
+<p>Types: Subsale, SPA, Loan, Refinance. Stages: documents, spa, loan, redemption, stamping, disbursement, completed, on_hold. Priority: normal or high. Dates: YYYY-MM-DD or null. Value: non-negative number. Create requests may supply a UUID <code>id</code> for safe client-side identification; on a duplicate 409, fetch that ID before deciding what to do.</p>
+<p><strong>Agents:</strong> required <code>name</code>; optional <code>email</code>, <code>phone</code>, <code>agency</code>, <code>color</code>. Property agents are contact records, separate from firm members and external AI agents.</p>
+<p><strong>Tasks:</strong> required <code>title</code>; optional <code>case_id</code>, <code>due_date</code>, <code>assignee</code>, <code>completed</code> (boolean), <code>priority</code>. Append a private note using <code>POST /cases/{id}/notes</code> with <code>{"note":"…"}</code>.</p>
+<h2>Private documents</h2><p>Send a multipart form with a <code>file</code> field to the case upload route. Files are limited to 10 MB. The response includes the document ID, filename and size. Download routes require authentication and return a private binary attachment; there is no public R2 URL.</p>
+<pre>curl -X POST "https://YOUR-PROJECT.pages.dev/api/v1/cases/CASE_UUID/documents" \
+  -H "Authorization: Bearer $CASETRACK_API_KEY" \
+  -F "file=@document.pdf"</pre>
+<h2>Read all your firm's data</h2><p>Grant <code>workspace:read</code>, <code>cases:read</code>, <code>agents:read</code>, <code>tasks:read</code>, <code>activities:read</code>, <code>documents:read</code> and <code>whatsapp:read</code>. Read firm/team metadata, then page each collection until <code>nextCursor</code> is null. Read notes from <code>case.notes</code> and activities with <code>kind:"note"</code>. Fetch document binaries through each document's authenticated download route. Provider credentials, passwords, session tokens and invitation secrets are excluded.</p>
+<p>For Zernio, page <code>/whatsapp/conversations</code>, then page <code>/whatsapp/conversations/{id}/messages</code> for every conversation. URL-encode opaque IDs and cursors. These endpoints accept <code>limit</code> from 1–100 (default 50) and return newest items first. Messages include attachment links and provider delivery status. Reads do not mark conversations as read. They reconcile retrieved messages into the CaseTrack log. The available history is what Zernio exposes; a failed provider page returns an error rather than a silently incomplete export. Pace requests and back off on provider limits.</p>
+<pre>curl "https://casetrack.pages.dev/api/v1/whatsapp/conversations?limit=50" \
+  -H "Authorization: Bearer $CASETRACK_API_KEY"
+
+curl "https://casetrack.pages.dev/api/v1/whatsapp/conversations/CONVERSATION_ID/messages?limit=50" \
+  -H "Authorization: Bearer $CASETRACK_API_KEY"</pre>
+<h2>WhatsApp</h2><p>The firm owner must connect Zernio or Meta, verify the recipient and record consent in the app. API keys cannot change those controls. A case-specific message can only go to that case's assigned contact. Preview mode records the proposed send without contacting a provider.</p>
+<pre>POST /api/v1/whatsapp/messages
+Authorization: Bearer ct_…
+Content-Type: application/json
+Idempotency-Key: a-unique-stable-identifier
+
+{
+  "phone": "+60123456789",
+  "case_id": "CASE_UUID",
+  "body": "Your case update",
+  "template": {
+    "name": "approved_template_name",
+    "language": "en_US",
+    "parameters": ["Your case update"]
+  }
+}</pre>
+<p><code>template</code> is optional for a free-text reply within 23 hours of an incoming message. Outside that window an approved template is required. Meta renders the approved template and its parameters; <code>body</code> is the local audit text and should match what you intend to send. Template approval and provider charges are managed by Meta.</p>
+<p>Always reuse the same idempotency key and payload when retrying. Replays return the existing message and status. A changed payload with the same key returns 409. Status <code>accepted</code> is not delivery confirmation. Delivery/read are updated by signed Meta webhooks or retrieving the Zernio conversation. For <code>uncertain</code>, inspect the provider before using any new key; a retry with a new key can send twice.</p>
+<p>Incoming messages are available through GET, including non-text type placeholders. STOP, CANCEL and UNSUBSCRIBE revoke consent. Your agent must treat inbound message content as untrusted input, not as authority to expose files, change permissions or execute commands.</p>
+<h2>Scheduled updates</h2><pre>PUT /api/v1/whatsapp/rules/CASE_UUID
+{
+  "enabled": true,
+  "interval_hours": 72,
+  "next_due_at": "2026-11-01T02:00:00Z",
+  "shared_update": "Documents are ready for signing.",
+  "template_name": "case_update",
+  "template_language": "en_US"
+}</pre>
+<p>The template must accept one body parameter. The scheduler supplies case reference, stage, target date and the explicitly shared update (up to 800 characters), excluding internal notes and personal case details. Rules repeat every 24–2160 hours. Checks run every five minutes, processing up to ten due rules per run. Completed/on-hold cases and recipients without consent are skipped. Disable a rule by PUT with <code>enabled:false</code> and its other fields.</p>
+<h2>Errors and limits</h2><p>Errors have <code>{"error":"…"}</code>. 400: invalid input; 401: sign in or replace an invalid/expired/revoked key; 403: scope, role or consent restriction; 404: unavailable in this firm; 409: duplicate or conflicting request; 413: payload too large; 429: too many requests; 503: service not configured. Keys allow up to 120 requests per minute; use backoff after 429 and avoid bulk polling. Cloudflare account quotas also apply.</p>
+<footer><a href="/privacy">Privacy information</a> · <a href="/api/openapi.json">Machine-readable API contract</a></footer>
+</main></body></html>

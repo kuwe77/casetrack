@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "casetrack",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-10-20",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "casetrack-documents"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "casetrack",
+      "database_id": "384e3921-ab85-437b-a53c-3ba862fb2870",
+      "migrations_dir": "cloudflare/migrations"
+    }
+  ]
+}

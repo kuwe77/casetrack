@@ -1,69 +1,36 @@
 # CaseTrack
 
-**Open-source conveyancing case management, deployed on your own Vercel and Supabase projects.**
-
-Track cases, property-agent contacts, milestones, follow-ups, internal notes and activity in a shadcn/ui dashboard. Each firm has a private workspace with owner-managed membership. An optional WhatsApp worker uses Hermes to interpret property-agent inquiries and returns only authorized case facts.
-
-## Deploy your own copy
-
-1. Create a Supabase project and run the supplied database migrations in filename order.
-2. Deploy to Vercel with your Supabase URL and publishable key.
-3. Create a confirmed email/password account in Supabase, sign in, and name your workspace.
-
-**[Follow the complete setup guide →](DEPLOYMENT.md)**
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fkuwe77%2Fcasetrack&env=VITE_SUPABASE_URL,VITE_SUPABASE_PUBLISHABLE_KEY&envDescription=Use%20your%20Supabase%20Project%20URL%20and%20publishable%20key.&envLink=https%3A%2F%2Fgithub.com%2Fkuwe77%2Fcasetrack%2Fblob%2Fmain%2FDEPLOYMENT.md&project-name=casetrack&repository-name=casetrack)
-
-The core dashboard requires only Vercel and Supabase. The optional WhatsApp integration additionally needs Zernio, Hermes and an always-on polling worker. Account provisioning is managed by the deployment administrator; sign-in uses email/password, so no SMTP/email provider is needed. The deployment button does not create the Supabase schema or accounts for you—complete the guide first.
+Conveyancing case management for law firms, hosted on Cloudflare Pages, Workers, D1 and private R2 storage. Firms register, create their own workspace, invite colleagues and issue scoped API keys for their AI agents.
 
 ## Features
 
-- Case register with search, filters, table and board views.
-- Conveyancing milestones, owners, property values and deadlines.
-- Property-agent contacts, follow-ups, internal notes and activity history.
-- Workspace creation, owner/member permissions, email-address invitations and membership removal.
-- Email/password sign-in, sign-out and signed-in password changes.
-- CSV export and light/dark themes, with desktop and mobile navigation.
-- Optional [WhatsApp polling, agent-scoped progress replies and configurable follow-ups](WHATSAPP.md).
+- Public website, self-service registration, password login and single-use account recovery codes.
+- Firm-isolated cases, property agents, follow-ups, notes, activity history and document uploads.
+- Owner-managed private invitations; removing a member revokes their API keys.
+- Per-user, per-firm API keys with scopes, expiration and revocation. Full API contract at `/api/openapi.json` and guide at `/api-docs.html`.
+- WhatsApp through Zernio or direct Meta: connected inbox/history, delivery status, consent controls, manual/API sends and scheduled template updates. Preview mode is the default.
 
-“Agents” are property contacts. The interface uses Malaysian conveyancing stages, MYR and Asia/Kuala_Lumpur business dates. Each account belongs to one workspace; members share the workspace's records.
+## Local development
 
-## Architecture and data
+Node.js 24 or later is required.
 
-Vercel serves the Vite/React application. Supabase Auth verifies users; PostgreSQL row-level security and constrained database functions enforce access. Record writes and their activity events commit together. No secret/service-role key is needed in the app. Fresh installations contain no dummy records, and there is no demo or local database fallback.
+1. `npm ci`
+2. Create `.dev.vars` containing `AUTH_SECRET=` followed by a cryptographically random secret of at least 32 characters. Never commit it. `node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"` can generate one locally.
+3. `npm run build`
+4. `npm run db:local`
+5. In separate terminals: `npm run dev:api`, `npm run dev:scheduler`, and `npm run dev`.
+6. Open `http://127.0.0.1:5173`. The frontend proxies `/api` to port 8788; the scheduled Worker runs on 8789.
 
-This is an early release, not an independently audited product. Read [SECURITY.md](SECURITY.md) for the threat model and [DEPLOYMENT.md](DEPLOYMENT.md) for backups, account recovery and the mandatory installation acceptance checks. Previous local databases stay local and are not automatically migrated.
+`npm test` runs frontend/model and Zernio adapter regression tests. With both local Workers running, `npm run test:integration` checks real local D1/R2/auth behavior, cross-firm isolation, API permissions, account recovery and WhatsApp preview/webhook/scheduler behavior using synthetic records. It refuses remote endpoints and never sends live WhatsApp messages. Local test records remain in `.wrangler/`.
 
-## Development
+See [deployment](DEPLOYMENT.md), [WhatsApp setup](WHATSAPP.md), [security model](SECURITY.md), and [contributing](CONTRIBUTING.md).
 
-Use Node.js 24 or newer.
+## Operating limits
 
-```sh
-npm ci
-cp .env.example .env.local
-# Set the two public Supabase build variables for a development project.
-npm run dev
-```
+This is not unlimited hosting. Pages static assets, Worker execution, D1 queries/storage and R2 storage/operations have different Cloudflare quotas. Quotas generally accumulate across projects within an account. Native scrypt password hashing uses Cloudflare's Node compatibility; verify authentication on your actual plan. Do not weaken password hashing to fit a quota.
 
-Open `http://localhost:5173`. To build and preview, run `npm run build` and `npm start`.
+WhatsApp requires each firm's connected Zernio account or direct Meta setup, credentials and approved templates. Provider charges are separate. Account recovery uses saved recovery codes; automatic email verification/reset delivery is not configured. Owners share invitation links themselves.
 
-```sh
-npm test
-npm run build
-npm audit
-```
+## License
 
-Database integration checks run separately with `npm run test:database` against an empty local PostgreSQL database. See [CONTRIBUTING.md](CONTRIBUTING.md). The test Auth schema simulates verified identities; a real provider acceptance test is still required after deployment.
-
-## Repository
-
-- `src/` — React dashboard, authentication and Supabase repository layer
-- `src/components/ui/` — shadcn/ui components
-- `supabase/migrations/` — deployable schema, RLS policies and database functions
-- `supabase/tests/` — disposable PostgreSQL authorization tests, never production migrations
-- `.env.example`, `vercel.json` — deployment configuration
-- `data/` — ignored legacy local files, never published or bundled
-
-Design uses shadcn/ui, Tailwind CSS and Geist, with layout guidance from [OpsLoop](https://opsloop-dashboard.vercel.app/) and the [ShadcnStore dashboard](https://shadcnstore.com/templates/dashboard/shadcn-dashboard-landing-template/dashboard). No proprietary template source is included.
-
-[MIT license](LICENSE) · [Contributing](CONTRIBUTING.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+MIT. Preserve third-party license notices in `THIRD_PARTY.md` and `docs/`.

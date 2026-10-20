@@ -12,8 +12,9 @@ coverage/
 *.key
 
 !.env.example
-.vercel/
-supabase/.temp/
+.wrangler/
+.dev.vars
+.dev.vars.*
 
 # Python worker runtime caches
 __pycache__/

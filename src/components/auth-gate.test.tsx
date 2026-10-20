@@ -1,123 +1,36 @@
 // @vitest-environment jsdom
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
-const mocks = vi.hoisted(() => ({
-  listener: null as null | ((event: string, session: unknown) => void),
-  password: vi.fn(),
-  unsubscribe: vi.fn(),
-  config: null as string | null,
-}));
-vi.mock("../lib/supabase", () => ({
-  get configurationError() {
-    return mocks.config;
-  },
-  supabase: {
-    auth: {
-      onAuthStateChange: (callback: typeof mocks.listener) => {
-        mocks.listener = callback;
-        return { data: { subscription: { unsubscribe: mocks.unsubscribe } } };
-      },
-    },
-  },
-  client: () => ({ auth: { signInWithPassword: mocks.password } }),
-}));
+const mocks = vi.hoisted(() => ({ session: { data: null as null | { user: { id: string } }, isPending: false, error: null }, signIn: vi.fn(), signUp: vi.fn() }));
+vi.mock("../lib/auth-client", () => ({ authClient: {
+  useSession: () => mocks.session, signIn: { email: mocks.signIn }, signUp: { email: mocks.signUp },
+} }));
 import { AuthGate } from "./auth-gate";
-afterEach(() => {
-  cleanup();
-  vi.clearAllMocks();
-  mocks.config = null;
-});
-function session(id: string | null) {
-  act(() =>
-    mocks.listener?.(
-      id ? "SIGNED_IN" : "SIGNED_OUT",
-      id ? { user: { id } } : null,
-    ),
-  );
-}
-describe("hosted authentication boundary", () => {
-  it("hides records until sign-in and removes them on sign-out", () => {
-    render(
-      <AuthGate>
-        <p>Private records</p>
-      </AuthGate>,
-    );
-    expect(screen.queryByText("Private records")).toBeNull();
-    session(null);
-    expect(screen.getByLabelText("Password")).toBeTruthy();
-    session("a");
-    expect(screen.getByText("Private records")).toBeTruthy();
-    session(null);
-    expect(screen.queryByText("Private records")).toBeNull();
+beforeEach(() => { history.replaceState(null, "", "/app"); mocks.session = { data: null, isPending: false, error: null }; });
+afterEach(cleanup);
+describe("account boundary", () => {
+  it("unmounts private workspace state when the account changes", () => {
+    function Private() { const [value,set] = useState(""); return <input aria-label="private note" value={value} onChange={e=>set(e.target.value)}/>; }
+    mocks.session.data = { user: { id: "first" } };
+    const view = render(<AuthGate><Private/></AuthGate>);
+    fireEvent.change(screen.getByLabelText("private note"), { target: { value: "Firm A confidential" } });
+    mocks.session.data = { user: { id: "second" } };
+    view.rerender(<AuthGate><Private/></AuthGate>);
+    expect((screen.getByLabelText("private note") as HTMLInputElement).value).toBe("");
   });
-  it("resets record-bearing component state when users change", () => {
-    function Content() {
-      const [value, setValue] = useState("");
-      return (
-        <input
-          aria-label="Draft"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-        />
-      );
-    }
-    render(
-      <AuthGate>
-        <Content />
-      </AuthGate>,
-    );
-    session("a");
-    fireEvent.change(screen.getByLabelText("Draft"), {
-      target: { value: "Private draft" },
-    });
-    session("b");
-    expect((screen.getByLabelText("Draft") as HTMLInputElement).value).toBe("");
+  it("shows login instead of protected content after sign out", () => {
+    const view = render(<AuthGate>Private firm data</AuthGate>);
+    expect(screen.queryByText("Private firm data")).toBeNull();
+    expect(screen.getByRole("button", { name: /^Sign in$/ })).toBeDefined();
+    view.unmount();
   });
-  it("uses email/password and displays provider errors without exposing records", async () => {
-    mocks.password.mockResolvedValue({
-      error: { message: "Invalid login credentials" },
-    });
-    render(
-      <AuthGate>
-        <p>Private records</p>
-      </AuthGate>,
-    );
-    session(null);
-    fireEvent.change(screen.getByLabelText("Email address"), {
-      target: { value: "test@example.com" },
-    });
-    fireEvent.change(screen.getByLabelText("Password"), {
-      target: { value: "test-password-only" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
-    await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toBe(
-        "Invalid login credentials",
-      ),
-    );
-    expect(mocks.password).toHaveBeenCalledWith({
-      email: "test@example.com",
-      password: "test-password-only",
-    });
-    expect(screen.queryByText("Private records")).toBeNull();
-    expect(screen.queryByRole("button", { name: /sign up/i })).toBeNull();
-  });
-  it("shows setup guidance instead of records when configuration is missing", () => {
-    mocks.config = "Missing Supabase connection";
-    render(
-      <AuthGate>
-        <p>Private records</p>
-      </AuthGate>,
-    );
-    expect(screen.getByText("Connect your Supabase project")).toBeTruthy();
-    expect(screen.queryByText("Private records")).toBeNull();
+  it("captures invitations in the tab and removes the secret from the URL", () => {
+    const token = "a".repeat(64);
+    history.replaceState(null, "", `/join#${token}`);
+    render(<AuthGate>Private</AuthGate>);
+    expect(sessionStorage.getItem("casetrack-invitation")).toBe(token);
+    expect(location.hash).toBe("");
+    expect(screen.getByRole("button", { name: "Create account" })).toBeDefined();
   });
 });

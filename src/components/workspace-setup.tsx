@@ -1,118 +1,27 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { FolderKanban } from "lucide-react";
 import { Button } from "./ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
 import { Input } from "./ui/input";
-import { rpc, errorMessage } from "../lib/repository";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { send } from "../lib/api";
+import { errorMessage } from "../lib/repository";
 import { SignOut } from "./auth-gate";
-interface Invitation {
-  id: string;
-  workspace_name: string;
-  expires_at: string;
-}
 export function WorkspaceSetup({ onReady }: { onReady: () => void }) {
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [invitations, setInvitations] = useState<Invitation[]>([]);
-  async function refresh() {
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [invite, setInvite] = useState(sessionStorage.getItem("casetrack-invitation") || "");
+  async function submit(e: FormEvent<HTMLFormElement>, join: boolean) {
+    e.preventDefault(); setBusy(true); setError("");
     try {
-      setInvitations(await rpc<Invitation[]>("pending_invitations"));
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  }
-  useEffect(() => {
-    void refresh();
-  }, []);
-  async function create(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    setBusy(true);
-    setError("");
-    try {
-      await rpc("create_workspace", { workspace_name: form.get("name") });
+      if (join) { await send("/invitations/accept", { token: invite.includes("#") ? invite.split("#").at(-1) : invite.trim() }); sessionStorage.removeItem("casetrack-invitation"); }
+      else await send("/workspace", { name: String(new FormData(e.currentTarget).get("name")).trim() });
       onReady();
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
+    } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
-  async function join(id: string) {
-    setBusy(true);
-    setError("");
-    try {
-      await rpc("accept_invitation", { invitation_id: id });
-      onReady();
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <main className="vault-screen">
-      <a className="vault-brand" href="#">
-        <FolderKanban />
-        CaseTrack <span>Workspace setup</span>
-      </a>
-      <Card className="vault-card">
-        <CardHeader>
-          <CardTitle>
-            {invitations.length
-              ? "Your workspace invitations"
-              : "Name your workspace"}
-          </CardTitle>
-          <CardDescription>
-            Join your firm’s invitation, or create a new workspace. Each account
-            belongs to one workspace.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {invitations.map((i) => (
-            <div className="invitation-row" key={i.id}>
-              <strong>{i.workspace_name}</strong>
-              <Button disabled={busy} onClick={() => join(i.id)}>
-                Join workspace
-              </Button>
-            </div>
-          ))}
-          <form onSubmit={create} className="vault-form">
-            <label>
-              New workspace name
-              <Input
-                name="name"
-                required
-                maxLength={150}
-                placeholder="Your firm or practice"
-                autoComplete="organization"
-              />
-            </label>
-            {error && (
-              <p className="form-error" role="alert">
-                {error}
-              </p>
-            )}
-            <Button disabled={busy}>
-              {busy ? "Please wait…" : "Create workspace"}
-            </Button>
-          </form>
-          <p className="vault-help">
-            Expecting an invitation? Ask your workspace owner to invite this
-            email before creating a new workspace.
-          </p>
-          <Button variant="ghost" disabled={busy} onClick={refresh}>
-            Refresh invitations
-          </Button>
-        </CardContent>
-      </Card>
-      <SignOut />
-    </main>
-  );
+  return <main className="vault-screen"><a className="vault-brand" href="/"><FolderKanban/>CaseTrack</a><Card className="vault-card">
+    <CardHeader><CardTitle>{invite ? "Join your firm" : "Name your workspace"}</CardTitle><CardDescription>Create a private workspace for your firm or use a colleague’s invitation.</CardDescription></CardHeader>
+    <CardContent>
+      <form className="vault-form" onSubmit={e => void submit(e, false)}><label>Firm name<Input name="name" required maxLength={150} autoComplete="organization" placeholder="Your firm or practice"/></label><Button disabled={busy}>Create workspace</Button></form>
+      <hr className="my-6"/><form className="vault-form" onSubmit={e => void submit(e, true)}><label>Invitation link or token<Input value={invite} onChange={e => setInvite(e.target.value)} required autoComplete="off"/></label><Button variant="outline" disabled={busy}>Join workspace</Button><p className="vault-help">Sign in using the email address your colleague invited.</p></form>
+      {error && <p className="form-error" role="alert">{error}</p>}
+    </CardContent></Card><SignOut/></main>;
 }
