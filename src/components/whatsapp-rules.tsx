@@ -11,7 +11,7 @@ export function WhatsAppRules({ w }: { w: Workspace }) {
   const [rules,setRules] = useState<Rule[]>([]), [error,setError] = useState(""), [notice,setNotice] = useState(""), [busy,setBusy] = useState(false);
   const refresh = () => api<Rule[]>("/whatsapp/rules").then(setRules);
   useEffect(() => { void refresh().catch(e=>setError(errorMessage(e))); },[]);
-  return <Card className="wa-card"><h2>Scheduled case updates</h2><p>Cloudflare checks due updates every five minutes. Only enabled, consenting recipients receive updates. Completed and on-hold cases are skipped. Templates must be approved by Meta and accept one body parameter containing the case update.</p>
+  return <Card className="wa-card"><h2>Scheduled case updates</h2><p>Scheduled updates are checked every five minutes. Only enabled, consenting recipients receive updates. Completed and on-hold cases are skipped. Templates must be approved by Meta and accept one body parameter containing the case update.</p>
     {w.cases.map(c => { const r=rules.find(r=>r.case_id===c.id); return <details className="wa-rule" key={`${c.id}:${JSON.stringify(r)}`}><summary>{c.ref}<span>{r?.enabled ? "Scheduled" : "Off"}</span></summary><form className="wa-form" onSubmit={async e=>{
       e.preventDefault(); const d=new FormData(e.currentTarget); setBusy(true); setError(""); setNotice("");
       try { await send(`/whatsapp/rules/${c.id}`,{enabled:d.has("enabled"),interval_hours:Number(d.get("interval")),next_due_at:new Date(String(d.get("next"))).toISOString(),shared_update:d.get("update"),template_name:d.get("template"),template_language:d.get("language")},"PUT"); await refresh(); setNotice("Follow-up rule saved.");}

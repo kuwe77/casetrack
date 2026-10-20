@@ -66,16 +66,16 @@ export function SettingsPage({ w, onSave }: {
         <Tabs.Content value="api" forceMount hidden={section !== "api"} className="settings-section"><ApiAccess/></Tabs.Content>
         <Tabs.Content value="security" forceMount hidden={section !== "security"} className="settings-section"><AccountSecurity/></Tabs.Content>
         <Tabs.Content value="data" forceMount hidden={section !== "data"} className="settings-section">
-          <header className="settings-section-header"><h2>Data & exports</h2><p>Download your records and understand how they are stored.</p></header>
+          <header className="settings-section-header"><h2>Data & exports</h2><p>Download your records and review your data options.</p></header>
           <section className="settings-data-section">
             <h3>Export your cases</h3><p>Download a spreadsheet-compatible CSV of all cases. Exported files are unencrypted; store them carefully.</p>
             <Button variant="outline" onClick={() => downloadCsv(w.cases, w.agents)}><Export size={17}/>Export all cases</Button>
           </section>
           <section className="settings-data-section">
-            <h3>Private cloud workspace</h3><p>Records are stored in Cloudflare D1. Access is checked against your firm membership and API permissions. Members share access to all records in this workspace.</p>
+            <h3>Who can access your data</h3><p>Your workspace is private to your firm. Members can access its records, and connected tools can only use the permissions you grant.</p>
           </section>
           <section className="settings-data-section">
-            <h3>Database backups</h3><p>Your deployment administrator manages Cloudflare D1 backups. Verify restoration regularly. CSV exports are not a complete workspace backup.</p>
+            <h3>Backups and recovery</h3><p>Contact your administrator about backups or restoring records. CSV exports include case data and are not a complete workspace backup.</p>
           </section>
         </Tabs.Content>
       </Tabs.Root>

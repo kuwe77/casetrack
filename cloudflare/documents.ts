@@ -31,7 +31,7 @@ export async function storeDocument(
     RETURNING id`)
     .bind(document.id, document.firmId, document.key, file.size, now(),
       totalBytes, file.size, totalFiles, document.firmId, firmBytes, file.size, document.firmId, firmFiles).first();
-  if (!reserved) fail(413, "Document storage allowance reached. Contact the deployment administrator.");
+  if (!reserved) fail(413, "Document storage allowance reached. Contact your administrator.");
   try {
     await env.FILES.put(document.key, await file.arrayBuffer(), { httpMetadata: { contentType: "application/octet-stream" } });
     await persist();

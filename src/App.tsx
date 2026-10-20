@@ -677,7 +677,7 @@ function Dashboard({
               </Card>
               <div className="page-footnote">
                 <span className="foot-brand">casetrack.</span>
-                <span>Open source · Your workspace</span>
+                <span>Your firm’s workspace</span>
                 <span>Malaysia · MYR</span>
               </div>
             </>

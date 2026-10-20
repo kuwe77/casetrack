@@ -29,7 +29,7 @@ export function WhatsAppInbox({onRecipient}:{onRecipient:(phone:string)=>void}) 
     if(connection.provider==="zernio") await loadConversations();
   });},[]);
   if (!connected && !error) return null;
-  return <Card className="wa-card"><div className="page-heading"><div><h2>Connected WhatsApp inbox</h2><p>Messages from your firm’s Zernio account. Opening a conversation does not send a read receipt.</p></div><Button variant="outline" disabled={busy} onClick={()=>void act(async()=>{await loadConversations();if(selected)await loadMessages(selected);})}>Refresh inbox</Button></div>
+  return <Card className="wa-card"><div className="page-heading"><div><h2>Connected WhatsApp inbox</h2><p>Messages from your firm’s connected WhatsApp account. Opening a conversation does not send a read receipt.</p></div><Button variant="outline" disabled={busy} onClick={()=>void act(async()=>{await loadConversations();if(selected)await loadMessages(selected);})}>Refresh inbox</Button></div>
     {error&&<p role="alert" className="form-error">{error}</p>}
     <div className="grid gap-5 lg:grid-cols-2"><div className="max-h-[32rem] overflow-y-auto space-y-2">{conversations.map(c=><button type="button" disabled={busy} className="w-full rounded-lg border p-3 text-left hover:bg-muted" aria-pressed={selected?.id===c.id} key={c.id} onClick={()=>void act(()=>loadMessages(c))}>
       <strong className="block">{c.participantName||c.participantId}</strong><small>{c.participantId}</small><p className="truncate text-sm">{c.lastMessage}</p>

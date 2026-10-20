@@ -17,7 +17,7 @@ export function CaseDocuments({ caseId }: { caseId: string }) {
   }
   useEffect(() => { void refresh().catch(e => setError(errorMessage(e))); }, [caseId]);
   return <section className="mt-6"><h3>Documents</h3><p className="vault-help">Private to your firm. Maximum 10 MB per file. Workspace and service storage allowances also apply.</p>
-    {available === false && <p role="status" className="vault-help">Document uploads are awaiting storage activation by the deployment administrator.</p>}
+    {available === false && <p role="status" className="vault-help">Document uploads are not available yet. Contact your administrator.</p>}
     <form className="vault-form" onSubmit={async e => {
     e.preventDefault(); const form = e.currentTarget; setBusy(true); setError("");
     try { await api(`/cases/${caseId}/documents`, { method: "POST", body: new FormData(form) }); form.reset(); await refresh(); }
