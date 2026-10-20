@@ -238,6 +238,62 @@ describe("Muse reply assistant", () => {
     expect(await f.claim()).not.toBeNull();
     expect(f.db.sqlite.prepare("SELECT state FROM reply_jobs WHERE id=?").get(job.id)!.state).toBe("held");
   });
+  it.each(["internal-thread", "60123456789"])("resolves the webhook conversation directly and sends to its verified API ID (%s)", async returnedId => {
+    const f = await fixture();
+    const incoming = f.event();
+    incoming.conversation.id = incoming.message.conversationId = "internal-thread";
+    f.db.sqlite.exec("UPDATE whatsapp_settings SET dry_run=0 WHERE firm_id='a'");
+    await f.webhook(incoming);
+    const job = (await f.claim())!, ctx = await f.context(job);
+    const conversation = { id: returnedId, accountId: "account-a", platform: "whatsapp", participantId: "60123456789" };
+    const requests: { path: string; method: string }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = new URL(String(input)), method = init?.method || "GET";
+      requests.push({ path: url.pathname, method });
+      expect(url.searchParams.get("accountId")).toBe("account-a");
+      if (url.pathname.endsWith("/search")) throw Error("A job must resolve its own conversation, never search for a replacement");
+      if (method === "POST") {
+        expect(url.pathname).toBe(`/api/v1/inbox/conversations/${returnedId}/messages`);
+        expect(JSON.parse(String(init?.body))).toMatchObject({ accountId: "account-a", message: "Your case is at SPA." });
+        return Response.json({ success: true, data: { messageId: "outgoing-provider-id", conversationId: returnedId } });
+      }
+      if (url.pathname.endsWith("/messages")) return Response.json({ messages: [{
+        id: incoming.message.id, accountId: "account-a", platform: "whatsapp", direction: "incoming", message: incoming.message.text, createdAt: incoming.message.sentAt,
+      }], pagination: { hasMore: false } });
+      return Response.json({ data: conversation });
+    });
+    const body = { body: "Your case is at SPA.", context_version: ctx.context_version };
+    const r = await f.request(`${prefix}/jobs/${job.id}/reply`, "POST", body, job);
+    expect(await r.json()).toMatchObject({ state: "replied", message: { status: "accepted" } });
+    expect(requests[0].path).toBe("/api/v1/inbox/conversations/internal-thread");
+    await f.request(`${prefix}/jobs/${job.id}/reply`, "POST", body, job);
+    expect(requests.filter(r => r.method === "POST")).toHaveLength(1);
+    expect(f.db.sqlite.prepare("SELECT conversation_id FROM whatsapp_messages WHERE direction='outgoing'").get()!.conversation_id).toBe(returnedId);
+  });
+  it.each([
+    { accountId: "account-a", platform: "whatsapp", participantId: "60199999999", status: 403 },
+    { accountId: "account-b", platform: "whatsapp", participantId: "60123456789", status: 404 },
+    { accountId: "account-a", platform: "instagram", participantId: "60123456789", status: 404 },
+  ])("rejects the wrong sender, account or platform: %j", async mismatch => {
+    const f = await fixture(); await f.webhook(f.event());
+    f.db.sqlite.exec("UPDATE whatsapp_settings SET dry_run=0 WHERE firm_id='a'");
+    const job = (await f.claim())!, ctx = await f.context(job);
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      expect(init?.method).toBe("GET");
+      return Response.json({ data: { id: "conversation-a", ...mismatch } });
+    });
+    expect((await f.request(`${prefix}/jobs/${job.id}/reply`, "POST", { body: "No send", context_version: ctx.context_version }, job)).status).toBe(mismatch.status);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(f.db.sqlite.prepare("SELECT count(*) n FROM whatsapp_messages WHERE direction='outgoing'").get()!.n).toBe(0);
+  });
+  it("does not search for a replacement when the job conversation is unavailable", async () => {
+    const f = await fixture(); await f.webhook(f.event());
+    f.db.sqlite.exec("UPDATE whatsapp_settings SET dry_run=0 WHERE firm_id='a'");
+    const job = (await f.claim())!, ctx = await f.context(job);
+    const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 404 }));
+    expect((await f.request(`${prefix}/jobs/${job.id}/reply`, "POST", { body: "No send", context_version: ctx.context_version }, job)).status).toBe(404);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it("reconciles a delivery receipt that arrives before the send response", async () => {
     const f = await fixture(); await f.webhook(f.event());
     f.db.sqlite.exec("UPDATE whatsapp_settings SET dry_run=0 WHERE firm_id='a'");

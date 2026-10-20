@@ -297,10 +297,12 @@ export function replyAssistantRoutes(app: App) {
     if (!await ready(c.env, job.firm_id)) fail(409, "Reply assistant is paused or its daily limit is reached.");
     if (job.received_at <= cutoff()) fail(409, "The reply window has closed. Ask a team member to handle this message.");
     const s = await connection(c.env, job.firm_id);
+    let conversationId = job.conversation_id;
     // Reconcile opt-outs before the final context/consent check. No template fallback: never start a paid outreach.
     if (!s.dry_run) {
-      const checked = await checkZernioRecipient(c.env, s, job.phone, true);
-      if (checked.conversationId !== job.conversation_id) fail(403, "The conversation no longer matches this sender.");
+      const checked = await checkZernioRecipient(c.env, s, job.phone, true, job.conversation_id);
+      if (!checked.conversationId) fail(403, "The conversation no longer matches this sender.");
+      conversationId = checked.conversationId;
     }
     const context = await allowedContext(c.env, job);
     if (context.context_version !== b.context_version || job.context_hash !== b.context_version) fail(409, "context_changed: fetch this job again and rewrite the reply.");
@@ -317,9 +319,9 @@ export function replyAssistantRoutes(app: App) {
     if (!claimed) fail(409, "Job is no longer available for this reply.");
     await c.env.DB.prepare(`INSERT INTO whatsapp_messages(id,firm_id,phone,direction,body,status,idempotency_key,created_at,actor,conversation_id)
       VALUES(?,?,?,'outgoing',?,'sending',?,?,'Reply assistant',?)`)
-      .bind(id, job.firm_id, job.phone, b.body, key, stamp, job.conversation_id).run();
-    const result = s.dry_run ? { status: "preview", providerId: null, conversationId: job.conversation_id }
-      : await sendProvider(c.env, s, job.phone, b.body, `casetrack:${job.firm_id}:${key}`, undefined, job.conversation_id);
+      .bind(id, job.firm_id, job.phone, b.body, key, stamp, conversationId).run();
+    const result = s.dry_run ? { status: "preview", providerId: null, conversationId }
+      : await sendProvider(c.env, s, job.phone, b.body, `casetrack:${job.firm_id}:${key}`, undefined, conversationId);
     const state = ["accepted", "preview"].includes(result.status) ? "replied" : "held";
     await c.env.DB.batch([
       c.env.DB.prepare("UPDATE whatsapp_messages SET status=?,provider_id=? WHERE id=? AND status='sending'").bind(result.status, result.providerId, id),

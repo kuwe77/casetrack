@@ -34,12 +34,20 @@ export async function syncMessages(env: Env, firmId: string, conversation: Conve
   for (let i=0;i<statements.length;i+=40) await env.DB.batch(statements.slice(i,i+40));
 }
 /** Reconcile consent before sending; never silently truncate the period since approval. */
-export async function checkZernioRecipient(env: Env, s: Settings, phone: string, requireReply: boolean) {
-  const client = await zernio(env,s), conversation = await client.findPhone(phone);
+export async function checkZernioRecipient(env: Env, s: Settings, phone: string, requireReply: boolean, expectedConversationId?: string) {
+  const client = await zernio(env,s);
+  // Webhooks use an internal ID; phone search/list results can use the platform ID.
+  // Resolve the signed event's exact conversation instead of comparing those aliases.
+  // getConversation also enforces the configured account and WhatsApp platform.
+  const conversation = expectedConversationId
+    ? await client.getConversation(expectedConversationId)
+    : await client.findPhone(phone);
   if (!conversation) {
     if (requireReply) fail(400, "An approved WhatsApp template is required to start this conversation.");
     return {client,conversationId:undefined};
   }
+  const matchesPhone = (value: string) => value.replace(/\D/g, "") === phone.replace(/\D/g, "");
+  if (!matchesPhone(conversation.participantId)) fail(403, "The conversation no longer matches this sender.");
   const consent = await env.DB.prepare("SELECT consent_updated_at FROM whatsapp_contacts WHERE firm_id=? AND phone=? AND enabled=1 AND consent=1")
     .bind(s.firm_id,phone).first<{consent_updated_at:string}>();
   if (!consent) fail(403,"Recipient must have messaging consent.");
@@ -48,6 +56,9 @@ export async function checkZernioRecipient(env: Env, s: Settings, phone: string,
   const seen = new Set<string>();
   for (let n=0;n<10;n++) {
     const page = await client.messages(conversation.id,cursor,100);
+    if (page.conversation.id !== conversation.id || !matchesPhone(page.conversation.participantId)) {
+      fail(403, "The conversation no longer matches this sender.");
+    }
     await syncMessages(env,s.firm_id,conversation,page.data);
     recentIncoming ||= page.data.some(m => m.direction==="incoming" && Date.parse(m.created_at)>Date.now()-23*3600000);
     if (!page.nextCursor || page.data.some(m=>Date.parse(m.created_at)<cutoff)) {complete=true;break;}
