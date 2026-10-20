@@ -140,6 +140,7 @@ export function whatsappRoutes(app: Hono<{ Bindings: Env; Variables: { identity:
       if (prior.request_hash && prior.request_hash !== requestHash) fail(409, "This idempotency key was already used for a different message.");
       return c.json({ id: prior.id, status: prior.status });
     }
+    if (idempotency.startsWith("schedule:")) fail(400, "Idempotency keys starting with schedule: are reserved for scheduled updates.");
     const contact = await c.env.DB.prepare("SELECT agent_id FROM whatsapp_contacts WHERE firm_id=? AND phone=? AND enabled=1 AND consent=1").bind(f, b.phone).first<{ agent_id: string }>();
     if (!contact) fail(403, "Recipient must be verified and have messaging consent.");
     if (b.case_id && !await c.env.DB.prepare("SELECT id FROM cases WHERE id=? AND firm_id=? AND agent_id=?").bind(b.case_id, f, contact.agent_id).first()) fail(403, "The recipient is not assigned to this case.");

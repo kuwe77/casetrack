@@ -10,6 +10,7 @@ import type { Env, Identity } from "./types";
 import { whatsappRoutes } from "./whatsapp";
 import { openapi } from "./openapi";
 import { ZernioError } from "./zernio";
+import { storeDocument } from "./documents";
 
 type AppEnv = { Bindings: Env; Variables: { identity: Identity } };
 export type AppContext = Context<AppEnv>;
@@ -278,14 +279,12 @@ app.post("/api/v1/cases/:id/documents", async c => {
   if (file.size > 10 * 1024 * 1024 || !file.size) fail(413, "Files must be between 1 byte and 10 MB.");
   const id = uid(), key = `${f}/${caseId}/${id}`;
   const filename = file.name.replace(/[^\p{L}\p{N}._ ()-]/gu, "_").slice(0, 180) || "document";
-  await c.env.FILES.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: "application/octet-stream" } });
-  try {
-    await c.env.DB.batch([
+  await storeDocument(c.env, { id, firmId: f, key }, file, () =>
+    c.env.DB.batch([
       c.env.DB.prepare("INSERT INTO documents(id,firm_id,case_id,filename,object_key,content_type,size,created_at,actor) VALUES(?,?,?,?,?,?,?,?,?)")
         .bind(id, f, caseId, filename, key, file.type || "application/octet-stream", file.size, now(), identity(c).email),
       audit(c, "Document uploaded", filename, "case", caseId),
-    ]);
-  } catch (error) { await c.env.FILES.delete(key); throw error; }
+    ]));
   return c.json({ id, filename, size: file.size }, 201);
 });
 app.get("/api/v1/documents/:id/download", async c => {

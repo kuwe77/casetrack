@@ -27,6 +27,8 @@ A free-text reply needs an inbound message within 23 hours (a conservative margi
 
 The scheduler claims due work atomically, skips completed/on-hold cases and unapproved recipients, and checks up to ten due updates every five minutes. High volume may require tuning or queues. Missed runs resume on a later tick; no exact-time delivery guarantee is made.
 
-Every send requires an `Idempotency-Key`. Retry using the same key and payload. `accepted` means the provider accepted the request; delivery/read status comes from signed Meta callbacks or authenticated Zernio message retrieval. `uncertain` means a timeout or ambiguous response: check the provider before attempting a new send. The system never automatically retries uncertain sends.
+Every send requires an `Idempotency-Key`. New manual keys must not start with the reserved `schedule:` prefix; existing same-key retries remain supported. Retry using the same key and payload. `accepted` means the provider accepted the request; delivery/read status comes from signed Meta callbacks or authenticated Zernio message retrieval. `uncertain` means a timeout or ambiguous response: check the provider before attempting a new send. The system never automatically retries uncertain sends.
+
+Resetting a rule to an already processed timestamp does not resend that occurrence. Duplicate occurrences and individual rule failures cannot abort other selected rules or the shared expiry cleanup. The ten-rule selection remains a shared capacity limit, not a per-firm delivery guarantee.
 
 API keys with `whatsapp:read` can read their firm's messages and rules. `whatsapp:write` can send to approved recipients and update rules. Provider credentials and recipient consent remain owner-controlled in the app. An external AI agent can combine WhatsApp scopes with case/task/note scopes to operate its own workflows. CaseTrack does not execute arbitrary agent code or infer changes from untrusted inbound messages.

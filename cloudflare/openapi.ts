@@ -44,11 +44,11 @@ export function openapi(origin: string) {
     paths[`/${resource}`] = {get:{...operation(`List ${resource}`,`${resource==="whatsapp/messages"?"whatsapp":resource}:read`,obj({data:{type:"array",items:obj({})},nextCursor:{type:["string","null"]}})),parameters:pageParameters}};
   }
   paths["/cases/{id}/notes"] = {parameters:[idParameter],post:{...operation("Append a private case note","notes:write",obj({success:{type:"boolean"}}),"201"),requestBody:body(obj({note:{...text,maxLength:10000}},["note"]))}};
-  paths["/cases/{id}/documents"] = {parameters:[idParameter],post:{...operation("Upload a private document (10 MB maximum)","documents:write",obj({id:uuid,filename:text,size:{type:"integer"}}),"201"),requestBody:{required:true,content:{"multipart/form-data":{schema:obj({file:{type:"string",format:"binary"}},["file"])}}}}};
+  paths["/cases/{id}/documents"] = {parameters:[idParameter],post:{...operation("Upload a private document (10 MB maximum; workspace and service allowances apply, exhausted allowance returns 413)","documents:write",obj({id:uuid,filename:text,size:{type:"integer"}}),"201"),requestBody:{required:true,content:{"multipart/form-data":{schema:obj({file:{type:"string",format:"binary"}},["file"])}}}}};
   paths["/documents/{id}/download"] = {parameters:[idParameter],get:{...operation("Download a private document","documents:read"),responses:{"200":{description:"Binary attachment",content:{"application/octet-stream":{schema:{type:"string",format:"binary"}}}}}}};
   (paths["/whatsapp/messages"] as Record<string,unknown>).post = {
     ...operation("Send or preview a WhatsApp message","whatsapp:write",obj({id:uuid,status:{enum:["preview","accepted","sent","delivered","read","failed","uncertain","sending","blocked"]}}),"201"),
-    parameters:[{name:"Idempotency-Key",in:"header",required:true,schema:{...text,minLength:8,maxLength:128},description:"Reuse the same key for a retry. A replay returns 200 and the existing status. Do not resend uncertain messages with a new key."}],
+    parameters:[{name:"Idempotency-Key",in:"header",required:true,schema:{...text,minLength:8,maxLength:128},description:"Reuse the same key for a retry. A replay returns 200 and the existing status. New keys must not start with the reserved schedule: prefix. Do not resend uncertain messages with a new key."}],
     requestBody:body(obj({phone:{...text,pattern:"^\\+[1-9]\\d{7,14}$"},body:{...text,minLength:1,maxLength:4096},case_id:nullableId,template:obj({name:text,language:text,parameters:{type:"array",items:text,maxItems:10}},["name","language"])},["phone","body"])),
   };
   paths["/whatsapp/rules"] = {get:operation("List scheduled follow-up rules","whatsapp:read",{type:"array",items:obj({})})};

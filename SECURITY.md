@@ -6,6 +6,8 @@
 - Recovery codes are random, hashed and single-use. Recovery changes the password and revokes sessions and API keys in an atomic database batch. Store the code offline; without it or the password, there is no automatic email-reset path.
 - Cookie-authenticated writes require the trusted origin. Bearer clients use HTTPS; no CORS access is enabled. Body and upload sizes are bounded. Request throttling uses D1 counters.
 - R2 is private. Downloads require an authorized firm session or documents:read key and are served as attachments without caching.
+- Document allocations reserve both firm and application-wide byte/file allowances atomically before R2 writes. Pending and existing documents count; failed uploads release allocation only after confirmed object deletion. These are application storage limits, not a Cloudflare account billing cap.
+- Scheduled occurrences are deduplicated and failures are isolated per rule. The `schedule:` idempotency prefix is reserved for new scheduler messages; existing manual retries remain valid.
 - Meta credentials and Zernio API keys are encrypted with AES-GCM using AUTH_SECRET-derived key material. Webhooks verify HMAC signatures and business number. Recipient consent, case assignment, preview mode and idempotency protect sends. Zernio requests pin the owner-verified account on the server and reject mismatched conversation/message accounts. Inbox pagination is explicit; no provider secrets are returned. Zernio opt-outs are reconciled during reads and before sending.
 - Audit records cover record writes, notes, uploads, keys and schedule changes. They are not an independent tamper-proof compliance ledger; account administrators control the underlying Cloudflare resources.
 

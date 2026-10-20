@@ -62,6 +62,16 @@ const upload = await keyCall(writer.data.key, `/cases/${matter.data.id}/document
 ok(upload.status, 201, "private R2 document upload");
 ok((await keyCall(writer.data.key, `/documents/${upload.data.id}/download`)).data, "Synthetic test document", "authorized R2 download");
 ok((await call(b, `/documents/${upload.data.id}/download`)).status, 404, "cross-firm document access denied");
+// Optional small allowance configured on the isolated local API for quota testing.
+if (process.env.TEST_DOCUMENT_FIRM_BYTES) {
+  const allowance = Number(process.env.TEST_DOCUMENT_FIRM_BYTES);
+  assert.ok(Number.isSafeInteger(allowance) && allowance > upload.data.size && allowance <= 10 * 1024 * 1024);
+  const remaining = new FormData(); remaining.set("file", new File([new Uint8Array(allowance - upload.data.size)], "remaining.bin"));
+  ok((await call(a, `/cases/${matter.data.id}/documents`, { method: "POST", body: remaining })).status, 201, "session upload can fill exact remaining firm allocation");
+  const overflow = new FormData(); overflow.set("file", new File(["x"], "overflow.txt"));
+  ok((await keyCall(writer.data.key, `/cases/${matter.data.id}/documents`, { method: "POST", body: overflow })).status, 413, "API key shares exhausted session storage allocation");
+  ok((await keyCall(writer.data.key, `/documents/${upload.data.id}/download`)).data, "Synthetic test document", "quota exhaustion preserves existing download");
+}
 ok((await call(a, "/keys")).data.some(k => "token_hash" in k || "key" in k), false, "API key secrets never returned");
 const invite = await call(a, "/invitations", { method: "POST", body: { email: member.email } });
 ok(invite.status, 201, "owner creates private invitation");
@@ -93,6 +103,7 @@ const preview = await call(a,"/whatsapp/messages",{method:"POST",body:message,he
 ok(preview.data.status,"preview","preview mode does not send externally");
 ok((await call(a,"/whatsapp/messages",{method:"POST",body:message,headers:{"Idempotency-Key":idem}})).data.id,preview.data.id,"retry does not duplicate message");
 ok((await call(a,"/whatsapp/messages",{method:"POST",body:{...message,body:"Different"},headers:{"Idempotency-Key":idem}})).status,409,"idempotency payload conflict rejected");
+ok((await call(a,"/whatsapp/messages",{method:"POST",body:message,headers:{"Idempotency-Key":`schedule:${matter.data.id}:1970-01-01T00:00:00.000Z`}})).status,400,"manual messages cannot occupy scheduled idempotency namespace");
 ok((await keyCall(writer.data.key,"/whatsapp/messages",{method:"POST",body:message,headers:{"Idempotency-Key":randomUUID()}})).status,403,"case-write key cannot send WhatsApp");
 async function incoming(text, id, signature = true, phoneId = "12345678901") {
   const payload = JSON.stringify({entry:[{changes:[{value:{metadata:{phone_number_id:phoneId},messages:[{id,from:phone.slice(1),timestamp:String(Math.floor(Date.now()/1000)),text:{body:text},type:"text"}]}}]}]});
@@ -118,6 +129,15 @@ ok(scheduled[0].status,"preview","scheduled preview never sends externally");
 ok(scheduled[0].body.includes("Private test note"),false,"scheduled message excludes internal notes");
 await fetch(schedulerBase+"/__scheduled");
 ok((await call(a,"/whatsapp/messages")).data.data.filter(m=>m.actor==="Scheduled follow-up").length,1,"repeat scheduler invocation does not duplicate");
+const contactB = await call(b,"/agents",{method:"POST",body:{name:"Other firm test contact"}});
+const caseB = await call(b,"/cases",{method:"POST",body:{ref:`OTHER-${suffix}`,buyer:"Synthetic",agent_id:contactB.data.id}});
+await call(b,"/whatsapp/settings",{method:"PUT",body:{phone_number_id:"12345678902",access_token:"synthetic-test-token",app_secret:appSecret,enabled:true,dry_run:true}});
+await call(b,`/whatsapp/contacts/${contactB.data.id}`,{method:"PUT",body:{phone,enabled:true,consent:true}});
+await call(a,`/whatsapp/rules/${matter.data.id}`,{method:"PUT",body:rule});
+await call(b,`/whatsapp/rules/${caseB.data.id}`,{method:"PUT",body:{...rule,next_due_at:new Date(Date.parse(rule.next_due_at)+1000).toISOString()}});
+ok((await fetch(schedulerBase+"/__scheduled")).status,200,"reset occurrence does not abort shared scheduler");
+ok((await call(a,"/whatsapp/messages")).data.data.filter(m=>m.actor==="Scheduled follow-up").length,1,"reset timestamp does not resend an occurrence");
+ok((await call(b,"/whatsapp/messages")).data.data.filter(m=>m.actor==="Scheduled follow-up").length,1,"another firm progresses after duplicate occurrence");
 await incoming("STOP",`stop-${suffix}`);
 ok((await call(a,"/whatsapp/messages",{method:"POST",body:message,headers:{"Idempotency-Key":randomUUID()}})).status,403,"STOP revokes messaging consent");
 await call(a,`/whatsapp/rules/${matter.data.id}`,{method:"PUT",body:rule});
