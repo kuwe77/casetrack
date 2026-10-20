@@ -54,11 +54,11 @@ export function WorkspaceTeam() {
   }
   return (
     <section className="workspace-team">
-      <h3>Workspace members</h3>
+      <header className="settings-section-header"><h2>Workspace members</h2>
       <p>
         Members can view and edit cases, contacts, notes and follow-ups. Only
         the owner manages membership and firm details.
-      </p>
+      </p></header>
       {members.map((m) => (
         <div className="team-row" key={m.user_id}>
           <span>

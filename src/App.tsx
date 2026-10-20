@@ -33,7 +33,6 @@ import {
   CheckCircle,
   EnvelopeSimple,
   Phone,
-  ShieldCheck,
 } from "@phosphor-icons/react";
 import type {
   CaseRecord,
@@ -74,12 +73,10 @@ import {
   TextLink,
 } from "./components/ui";
 import { Editor } from "./components/forms";
-import { AccountSecurity } from "./components/account-security";
-import { ApiAccess } from "./components/api-access";
+import { SettingsPage } from "./components/settings-page";
 import { CaseDocuments } from "./components/case-documents";
 import { SignOut } from "./components/auth-gate";
 import { WhatsAppPage } from "./components/whatsapp-page";
-import { WorkspaceTeam } from "./components/workspace-team";
 import { WorkspaceSetup } from "./components/workspace-setup";
 import { FolderKanban, Sun, Moon } from "lucide-react";
 import { Button } from "./components/ui/button";
@@ -1693,138 +1690,6 @@ function ActivityPage({
           )}
         </div>
       </Card>
-    </>
-  );
-}
-function SettingsPage({
-  w,
-  onSave,
-}: {
-  w: Workspace;
-  onSave: (firm: Workspace["firm"]) => Promise<void>;
-}) {
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
-    const f = new FormData(e.currentTarget);
-    try {
-      const name = String(f.get("name") || "").trim();
-      if (!name) throw Error("Enter a workspace name.");
-      await onSave({
-        ...w.firm,
-        name,
-        email: String(f.get("email") || "").trim(),
-      });
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <>
-      <PageHeading
-        eyebrow="MAKE IT YOURS"
-        title="Workspace settings"
-        description="The details that make this space belong to your firm."
-      />
-      <div className="settings-grid">
-        <Card className="panel settings-panel">
-          <SectionTitle
-            title="Firm profile"
-            subtitle="Shown throughout your workspace"
-          />
-          <form onSubmit={submit}>
-            <label className="field">
-              <span>Firm name</span>
-              <Input
-                name="name"
-                defaultValue={w.firm.name}
-                required
-                maxLength={150}
-              />
-            </label>
-            <label className="field">
-              <span>Office email</span>
-              <Input
-                type="email"
-                name="email"
-                defaultValue={w.firm.email}
-                maxLength={254}
-              />
-            </label>
-            <div className="settings-fixed">
-              <div>
-                <span>Workspace timezone</span>
-                <strong>Asia / Kuala Lumpur</strong>
-              </div>
-              <div>
-                <span>Currency</span>
-                <strong>MYR · Malaysian ringgit</strong>
-              </div>
-            </div>
-            {error && (
-              <p className="form-error" role="alert">
-                {error}
-              </p>
-            )}
-            <Button
-              variant="ghost"
-              className="button button-primary"
-              disabled={busy}
-            >
-              {busy ? "Saving…" : "Save changes"}
-            </Button>
-          </form>
-          <WorkspaceTeam />
-          <ApiAccess />
-        </Card>
-        <div className="settings-side">
-          <AccountSecurity />
-          <Card className="panel connection-panel">
-            <span className="connection-icon">
-              <ShieldCheck size={27} />
-            </span>
-            <h2>Private cloud workspace</h2>
-            <p>
-              Records are stored in Cloudflare D1. Every request is checked
-              against your firm membership and API permissions.
-            </p>
-            <span className="connection-status live">
-              <i /> Cloudflare workspace
-            </span>
-            <p className="connection-note">
-              Your deployment owner controls the database and backups. Members
-              share access to all records in this workspace.
-            </p>
-          </Card>
-          <section className="settings-export">
-            <h3>Database backups</h3>
-            <p>
-              Your deployment administrator manages Cloudflare D1 backups. Verify restoration
-              regularly. CSV exports are not a complete workspace backup.
-            </p>
-          </section>
-          <section className="settings-export">
-            <h3>Export your records</h3>
-            <p>
-              Download a spreadsheet-compatible CSV. Exported files are
-              unencrypted; store them carefully.
-            </p>
-            <Button
-              variant="ghost"
-              className="button button-secondary"
-              onClick={() => downloadCsv(w.cases, w.agents)}
-            >
-              <Export size={17} />
-              Export all cases
-            </Button>
-          </section>
-        </div>
-      </div>
     </>
   );
 }

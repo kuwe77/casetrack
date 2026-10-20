@@ -1,0 +1,91 @@
+/* Settings use one section at a time and scoped form styles. */
+.settings-page { max-width: 1040px; margin-bottom: 40px; }
+.settings-tabs { display: flex; gap: 6px; padding-bottom: 14px; overflow-x: auto; }
+.settings-tab { flex: 0 0 auto; padding: 10px 16px; border-radius: 7px; border: 1px solid transparent; color: var(--muted-foreground); font-size: 14px; font-weight: 500; }
+.settings-tab:hover { color: var(--foreground); background: var(--accent); }
+.settings-tab[data-state="active"] { color: var(--foreground); background: var(--card); border-color: var(--border); }
+.settings-section { min-width: 0; padding: 28px 32px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.settings-section[hidden] { display: none; }
+.settings-section-header { margin-bottom: 24px; }
+.settings-section-header h2 { font-size: 18px; font-weight: 600; letter-spacing: -.3px; }
+.settings-section-header p, .settings-help { color: var(--muted-foreground); font-size: 13px; line-height: 1.65; }
+.settings-section-header p { margin-top: 6px; max-width: 66ch; }
+.settings-header-with-link { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.settings-docs-link { display: inline-flex; gap: 5px; align-items: center; flex-shrink: 0; font-size: 13px; padding-block: 3px; text-decoration: underline; text-underline-offset: 3px; }
+.settings-form { display: grid; gap: 20px; margin: 0; padding: 0; }
+.settings-form-narrow { max-width: 620px; }
+.settings-field { display: flex; flex-direction: column; min-width: 0; gap: 8px; font-size: 13px; font-weight: 500; }
+.settings-field input { min-height: 42px; background: var(--card); font-weight: 400; font-size: 14px; }
+.settings-field-pair { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 20px; }
+.settings-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.settings-actions > [data-slot="button"] { min-height: 39px; }
+.settings-page [data-slot="button"][data-variant="default"] { background: var(--primary); color: var(--primary-foreground); }
+.settings-actions > span { color: var(--muted-foreground); font-size: 13px; }
+.settings-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 4px 0; padding-block: 20px; border-block: 1px solid var(--border); font-size: 13px; }
+.settings-facts dt { color: var(--muted-foreground); margin-bottom: 6px; }
+.settings-facts dd { margin: 0; }
+.settings-section .workspace-team { padding: 0; border: 0; }
+.settings-section .team-row { font-size: 14px; padding-block: 16px; }
+.settings-section .team-row small { font-size: 12px; margin-top: 4px; }
+.settings-section .team-invite { max-width: 680px; padding: 24px 0 0; }
+.settings-section .team-invite input { height: 42px; font-size: 14px; }
+.settings-section .team-invite > button { min-height: 42px; }
+.settings-section .vault-help { font-size: 13px; overflow-wrap: anywhere; }
+.settings-security-recovery { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); }
+.settings-security-recovery > p { max-width: 66ch; margin: 8px 0 20px; }
+.settings-data-section { padding-block: 22px; border-top: 1px solid var(--border); }
+.settings-data-section:last-child { padding-bottom: 0; }
+.settings-data-section p { max-width: 70ch; font-size: 14px; color: var(--muted-foreground); margin: 8px 0 16px; }
+.settings-data-section:last-child p { margin-bottom: 0; }
+.settings-secret { margin-top: 24px; padding: 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); font-size: 13px; }
+.settings-secret > code { display: block; overflow-wrap: anywhere; user-select: all; margin-block: 14px; }
+.settings-section .form-error { margin-top: 16px; }
+.api-permissions { min-width: 0; margin: 0; padding: 0; border: 0; }
+.api-permissions legend { padding: 0; font-size: 14px; font-weight: 600; }
+.api-permissions-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 12px; }
+.api-permissions-toolbar > span { font-size: 13px; color: var(--muted-foreground); }
+.api-permissions-toolbar > div { display: flex; align-items: center; gap: 6px; }
+.api-permissions-toolbar button { min-height: 34px; }
+.api-permissions-table { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.api-permissions table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
+.api-permissions th { text-align: left; font-weight: 400; padding: 9px 16px; }
+.api-permissions thead { background: var(--background); color: var(--muted-foreground); }
+.api-permissions thead th { font-size: 12px; font-weight: 500; padding-block: 12px; }
+.api-permissions th:not(:first-child), .api-permissions td { text-align: center; width: 100px; }
+.api-permissions tbody tr { border-top: 1px solid var(--border); }
+.api-permissions tbody tr:hover { background: var(--background); }
+.api-permission-check { display: flex; justify-content: center; align-items: center; min-height: 42px; width: 100%; cursor: pointer; }
+.api-permission-check input { width: 17px; height: 17px; padding: 0; margin: 0; accent-color: var(--primary); cursor: pointer; }
+.api-permission-unavailable { color: var(--muted-foreground); }
+.api-permissions > .settings-help { margin-top: 12px; max-width: 75ch; }
+.api-existing-keys { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); }
+.api-existing-keys > .settings-help { margin-top: 10px; }
+.api-key-list { list-style: none; padding: 0; margin: 8px 0 0; }
+.api-key-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 18px 0; }
+.api-key-row + .api-key-row { border-top: 1px solid var(--border); }
+.api-key-details { min-width: 0; overflow-wrap: anywhere; }
+.api-key-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 14px; }
+.api-key-title strong { font-weight: 500; }
+.api-key-status { color: var(--muted-foreground); font-size: 12px; }
+.api-key-details > p { display: flex; flex-wrap: wrap; column-gap: 16px; margin-block: 5px; font-size: 12px; color: var(--muted-foreground); }
+.api-key-permissions { font-size: 12px; }
+.api-key-permissions summary, .api-revoked-keys > summary { cursor: pointer; padding-block: 5px; color: var(--muted-foreground); }
+.api-key-permissions ul { display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; margin: 8px 0 0; padding: 0; }
+.api-revoked-keys { margin-top: 12px; font-size: 13px; }
+@media (max-width: 700px) {
+  .settings-tabs { flex-wrap: wrap; overflow: visible; gap: 4px; }
+  .settings-section { padding: 22px 20px; }
+  .settings-header-with-link { flex-direction: column; gap: 12px; }
+  .settings-field-pair { grid-template-columns: minmax(0, 1fr) 145px; gap: 16px; }
+  .settings-tab { padding-inline: 12px; font-size: 13px; }
+  .api-permissions th:not(:first-child), .api-permissions td { width: 70px; }
+}
+@media (max-width: 480px) {
+  .settings-section { padding: 20px 16px; }
+  .settings-field-pair, .settings-facts { grid-template-columns: 1fr; }
+  .settings-field input { font-size: 16px; }
+  .api-permissions th { padding-inline: 10px; font-size: 13px; }
+  .api-permissions th:not(:first-child), .api-permissions td { width: 56px; }
+  .api-permissions-toolbar { flex-wrap: wrap; }
+  .api-key-row { gap: 10px; }
+}
