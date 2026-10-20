@@ -19,6 +19,7 @@ const scopes = resources.flatMap(r => [r.read && `${r.id}:read`, r.write && `${r
 interface Key { id: string; name: string; prefix: string; scopes: string[]; expires_at: string; last_used_at: string | null; revoked_at: string | null }
 const date = (value: string) => new Date(value).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 function scopeLabel(scope: string) {
+  if (scope === "assistant:reply") return "Agent replies · Assigned cases only";
   const [resource, action] = scope.split(":");
   return `${resources.find(r => r.id === resource)?.label || resource} · ${action === "write" ? "Write" : "Read"}`;
 }

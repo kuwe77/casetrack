@@ -8,6 +8,7 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { WhatsAppRules } from "./whatsapp-rules";
 import { WhatsAppInbox } from "./whatsapp-inbox";
+import { ReplyAssistant } from "./reply-assistant";
 type Settings = { provider?: "meta"|"zernio"; phone_number_id: string; enabled: number; dry_run: number; has_token: boolean; has_secret: boolean; zernio_account_id?:string;has_zernio_key?:boolean;account_label?:string };
 type Contact = { agent_id: string; phone: string; enabled: number; consent: number };
 type Message = { id: string; phone: string; body: string; direction: string; status: string; created_at: string };
@@ -69,7 +70,7 @@ export function WhatsAppPage({ w }: { w: Workspace }) {
       const r = await send<{ verifyToken: string }>("/whatsapp/verification-token", {}); setVerifyToken(r.verifyToken);
     }, "New verification token generated")}>Generate verification token</Button>
       {verifyToken && <div className="wa-token"><p>Copy this into Meta’s verification token field.</p><code className="break-all select-all">{verifyToken}</code><Button variant="ghost" onClick={() => setVerifyToken("")}>Dismiss</Button></div>}</>}
-      <h3 className="mt-6">Connect your AI agent</h3><p>Create an API key in Settings with whatsapp:read to pull messages and whatsapp:write to send updates. Your agent can combine those with case and follow-up permissions.</p><a className="text-link" href="/api-docs.html">API documentation ↗</a><p className="vault-help">Incoming STOP, CANCEL or UNSUBSCRIBE messages disable recipient consent. Messages are never sent automatically by the dashboard.</p>
+      <h3 className="mt-6">Connect your AI agent</h3><p>Use Agent replies with Muse below for questions from property agents. Its restricted key only accesses the sender’s assigned case summaries.</p><a className="text-link" href="/api-docs.html">API documentation ↗</a><p className="vault-help">Incoming STOP, CANCEL or UNSUBSCRIBE messages disable recipient consent.</p>
     </Card></div>}
     {owner && <Card className="wa-card"><h2>Approved recipients</h2><p>Verify the contact’s number and obtain consent before enabling messages.</p>{w.agents.map(a => {
       const existing = contacts.find(x => x.agent_id === a.id);
@@ -78,6 +79,7 @@ export function WhatsAppPage({ w }: { w: Workspace }) {
         void act(() => send(`/whatsapp/contacts/${a.id}`, { phone: data.get("phone"), enabled: data.has("enabled"), consent: data.has("consent") }, "PUT"), "Recipient saved");
       }}><strong>{a.name}</strong><label className="field"><span>International number</span><Input name="phone" required pattern="\+[1-9][0-9]{7,14}" defaultValue={existing?.phone || a.phone} placeholder="+60123456789"/></label><label className="wa-check"><input type="checkbox" name="enabled" defaultChecked={!!existing?.enabled}/>Verified</label><label className="wa-check"><input type="checkbox" name="consent" defaultChecked={!!existing?.consent}/>Consent</label><Button variant="outline" disabled={busy}>Save</Button></form>;
     })}{!w.agents.length && <p className="vault-help">Add a contact in Agents first.</p>}</Card>}
+    {owner && settings.provider === "zernio" && <ReplyAssistant key={`assistant:${settings.enabled}:${settings.zernio_account_id}`}/>}
     <WhatsAppInbox key={`${settings.provider}:${settings.zernio_account_id}`} onRecipient={setRecipient}/>
     {owner && <WhatsAppRules w={w}/>}<Card className="wa-card"><h2>Compose an update</h2><p>Free-text replies require an incoming message within the last 23 hours. Use the API with an approved template outside that window.</p><form className="wa-form" onSubmit={e => {
       e.preventDefault(); const form = e.currentTarget, data = new FormData(form);

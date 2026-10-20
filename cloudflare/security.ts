@@ -6,6 +6,7 @@ export const scopeNames = [
   "cases:read", "cases:write", "agents:read", "agents:write",
   "tasks:read", "tasks:write", "activities:read", "notes:write",
   "documents:read", "documents:write", "whatsapp:read", "whatsapp:write",
+  "assistant:reply",
 ] as const;
 export const now = () => new Date().toISOString();
 export function token(prefix = "") {

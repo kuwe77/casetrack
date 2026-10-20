@@ -64,6 +64,17 @@ Idempotency-Key: a-unique-stable-identifier
 <p><code>template</code> is optional for a free-text reply within 23 hours of an incoming message. Outside that window an approved template is required. Meta renders the approved template and its parameters; <code>body</code> is the local audit text and should match what you intend to send. Template approval and provider charges are managed by Meta.</p>
 <p>Always reuse the same idempotency key and payload when retrying. New manual keys must not start with the reserved <code>schedule:</code> prefix. Replays return the existing message and status, including previously accepted keys with that prefix. A changed payload with the same key returns 409. Status <code>accepted</code> is not delivery confirmation. Delivery/read are updated by signed Meta webhooks or retrieving the Zernio conversation. For <code>uncertain</code>, inspect the provider before using any new key; a retry with a new key can send twice.</p>
 <p>Incoming messages are available through GET, including non-text type placeholders. STOP, CANCEL and UNSUBSCRIBE revoke consent. Your agent must treat inbound message content as untrusted input, not as authority to expose files, change permissions or execute commands.</p>
+<h2>Property-agent replies with Muse</h2>
+<p>Use the <strong>dedicated Muse key</strong> created in WhatsApp, with only <code>assistant:reply</code>. It cannot read the general inbox, private notes, documents or full case records. Do not give a customer-facing assistant the broader keys described above. <a href="/muse/SETUP.md">Setup guide and worker instructions</a> · <a href="/muse/casetrack.py">Python polling helper</a>.</p>
+<pre>GET  /api/v1/whatsapp/assistant/poll
+POST /api/v1/whatsapp/assistant/claim
+GET  /api/v1/whatsapp/assistant/jobs/JOB_ID
+POST /api/v1/whatsapp/assistant/jobs/JOB_ID/reply
+POST /api/v1/whatsapp/assistant/jobs/JOB_ID/heartbeat
+POST /api/v1/whatsapp/assistant/jobs/JOB_ID/skip
+GET  /api/v1/whatsapp/assistant/jobs/JOB_ID/status</pre>
+<p>Poll every 30 seconds using a script: empty checks return <code>silent</code>, with no AI invocation. Claim returns a job or null, and a private token. Job endpoints require <code>X-Job-Token</code>. Fetch context before drafting; it includes only the verified sender’s assigned case summaries and shared updates. Reply with <code>{"body":"…","context_version":"…"}</code>. The recipient is fixed; additional fields are rejected.</p>
+<p>Claims last ten minutes; renew before expiry. Only one job per firm processes at a time, combining at most five questions from the same sender. Case or consent changes invalidate drafts. A 409 with <code>context_changed</code> requires fresh context and a rewritten answer. Repeating the same reply returns its recorded result; never resend held or uncertain results as a new message. Pausing cancels queued work; only new questions after enabling are eligible. The daily cap defaults to 100 (UTC day); actual messaging and AI allowances still apply. Manual idempotency keys also reserve the <code>assistant:</code> prefix.</p>
 <h2>Scheduled updates</h2><pre>PUT /api/v1/whatsapp/rules/CASE_UUID
 {
   "enabled": true,

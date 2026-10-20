@@ -6,7 +6,21 @@ CaseTrack connects through Zernio or directly to the Meta WhatsApp Cloud API. Ho
 
 In the firm's WhatsApp page, select **Zernio**, enter the Zernio account ID and API key, and save. The server verifies that the key owns an active WhatsApp account. The key is encrypted and is never returned to the browser or external agents. Each connected Zernio account can belong to only one CaseTrack firm.
 
-The connected inbox lists conversations and loads messages with explicit pagination. Refresh retrieves new messages and delivery/read statuses without sending read receipts. Retrieved messages are reconciled into the firm message log. Existing Zernio/Hermes automations and webhook registrations are not changed. This implementation polls on request; it does not claim instant push delivery.
+The connected inbox lists conversations and loads messages with explicit pagination. Refresh retrieves new messages and delivery/read statuses without sending read receipts. Retrieved messages are reconciled into the firm message log. The optional reply assistant adds its own account-scoped webhook subscription without replacing unrelated registrations.
+
+## Muse reply assistant
+
+Meta Muse is the external reasoning agent. CaseTrack does not host an LLM. See [the Muse setup guide](public/muse/SETUP.md) and [standard-library poller](public/muse/casetrack.py).
+
+The owner enables agent replies, connects the signed Zernio webhook and creates an `assistant:reply` key. This scope cannot be combined with any other scope and requires an owner to mint it. Incoming messages qualify only for the current connected account, verified phone and consented registered agent, after enabling, within 23 hours. Unknown/hidden senders, standby events, synthetic test events and non-text messages do not create AI jobs. STOP opts out immediately.
+
+The hook polls every 30 seconds without AI or provider calls. On a new eligible job it claims and persists it before returning `wake`. One active claim per firm; ten-minute renewable leases; three processing attempts maximum; at most five questions from the same sender/conversation. Muse must start an isolated conversation for each job, with no personal memory or unrelated tools.
+
+Job context projects only assigned case references, type, status, target date and explicitly shared update. The server never returns private parties, property, values, notes or documents. Context revisions and a final SQL compare-and-set reject drafts after case/consent/account changes. AI output is still model-generated: scope restrictions constrain available data, while topic adherence and avoiding fabricated answers require the documented isolated-worker instructions.
+
+Replies have a fixed recipient and idempotency key. Repeated identical submissions return their existing outcome. Ambiguous sends are held for human review, never automatically retried; an interrupted dispatch stops blocking other senders after two minutes. Signed delivery receipts reconcile even when they arrive before the send response; receipt lookup records expire after 30 days, while message/job history remains. The owner sees recent questions, status and a daily reply cap (default 100, maximum 300, UTC reset).
+
+Switching accounts or disabling messaging pauses the assistant and cancels waiting work. The existing Preview only setting applies. No automatic template outreach is used. Deploy migration `0007_reply_assistant.sql` before the Pages worker and scheduler. No Muse-side hook is enabled by a website deployment; complete the guide on the Muse VM.
 
 External agents use `whatsapp:read` for `/whatsapp/connection`, `/whatsapp/contacts`, `/whatsapp/conversations`, `/whatsapp/conversations/{id}/messages`, the local `/whatsapp/messages` log, and rules. Follow every `nextCursor` until null; IDs and cursors are opaque. This exposes the history available from the connected provider, including incoming/outgoing messages and attachment links. The server pins the firm's account ID and rejects data belonging to a different provider account.
 

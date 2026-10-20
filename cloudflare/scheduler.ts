@@ -66,6 +66,7 @@ export async function runSchedules(env: Env, fetcher: typeof fetch = fetch) {
       env.DB.prepare("DELETE FROM verification WHERE expiresAt<?").bind(Date.now()),
       env.DB.prepare("DELETE FROM rateLimit WHERE lastRequest<?").bind(Date.now() - 86400000),
       env.DB.prepare("DELETE FROM workspace_invites WHERE expires_at<?").bind(start),
+      env.DB.prepare("DELETE FROM reply_delivery_receipts WHERE created_at<?").bind(new Date(Date.now()-30*86400000).toISOString()),
     ]);
   }
 }
