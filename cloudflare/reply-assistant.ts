@@ -4,6 +4,7 @@ import type { Env, Identity } from "./types";
 import { owner, firm, identity, scope, audit, type AppContext } from "./index";
 import { decrypt, digest, encrypt, fail, now, token } from "./security";
 import { checkZernioRecipient, sendProvider, type Settings } from "./whatsapp-provider";
+import { stageContext, followupInstructions, followupTemplate } from "./muse-followups";
 
 type App = Hono<{ Bindings: Env; Variables: { identity: Identity } }>;
 type Config = { firm_id: string; enabled: number; enabled_at: string; daily_limit: number; webhook_secret: string; webhook_id: string | null; context_revision: number };
@@ -11,6 +12,7 @@ type Job = {
   id: string; firm_id: string; agent_id: string; phone: string; account_id: string; conversation_id: string;
   question: string; received_at: string; state: string; claim_key_id: string | null; claim_hash: string | null;
   lease_until: string | null; context_hash: string | null; reply_body: string | null; outgoing_id: string | null;
+  kind: string; case_id: string | null; stage: string | null; expires_at: string | null;
 };
 const prefix = "/api/v1/whatsapp/assistant";
 const leaseMs = 10 * 60_000;
@@ -50,6 +52,13 @@ async function allowedContext(env: Env, job: Job) {
   if (!contact) fail(403, "This sender is no longer approved.");
   const s = await connection(env, job.firm_id);
   if (s.zernio_account_id !== job.account_id) fail(403, "The connected account has changed.");
+  if (job.kind === "followup") {
+    const notification = await stageContext(env, job);
+    const after = await configuration(env, job.firm_id);
+    if (!after?.enabled || before?.context_revision !== after.context_revision) fail(409, "context_changed: Fetch the context again.");
+    const data = { kind: "followup", agent: contact, notification, context_revision: after.context_revision };
+    return { ...data, context_version: await digest(JSON.stringify(data)) };
+  }
   const cases = await env.DB.prepare(`SELECT c.id,c.ref,c.type,c.status,c.due_date,
     COALESCE(r.shared_update,'') AS shared_update
     FROM cases c LEFT JOIN whatsapp_rules r ON r.case_id=c.id AND r.firm_id=c.firm_id
@@ -60,7 +69,7 @@ async function allowedContext(env: Env, job: Job) {
     .bind(job.firm_id, job.id, job.id).all();
   const after = await configuration(env, job.firm_id);
   if (!after?.enabled || before?.context_revision !== after.context_revision) fail(409, "context_changed: Fetch the context again.");
-  const data = { agent: contact, questions: messages.results, cases: cases.results, context_revision: after.context_revision };
+  const data = { kind: "reply", agent: contact, questions: messages.results, cases: cases.results, context_revision: after.context_revision };
   return { ...data, context_version: await digest(JSON.stringify(data)) };
 }
 async function authorizedJob(c: AppContext, allowFinished = false) {
@@ -74,7 +83,10 @@ async function authorizedJob(c: AppContext, allowFinished = false) {
   }
   return job;
 }
-const canProcess = `j.received_at>? AND j.attempts<3 AND
+const canProcess = `((j.kind='reply' AND j.received_at>?) OR (j.kind='followup' AND j.expires_at>?
+  AND EXISTS(SELECT 1 FROM muse_followup_settings fs WHERE fs.firm_id=j.firm_id AND fs.enabled=1)
+  AND EXISTS(SELECT 1 FROM cases c JOIN muse_stage_rules r ON r.firm_id=c.firm_id AND r.case_id=c.id AND r.stage=c.status
+    WHERE c.firm_id=j.firm_id AND c.id=j.case_id AND c.agent_id=j.agent_id AND c.status=j.stage AND r.enabled=1))) AND j.attempts<3 AND
   EXISTS(SELECT 1 FROM whatsapp_contacts w WHERE w.firm_id=j.firm_id AND w.agent_id=j.agent_id AND w.phone=j.phone AND w.enabled=1 AND w.consent=1) AND
   EXISTS(SELECT 1 FROM whatsapp_settings s WHERE s.firm_id=j.firm_id AND s.provider='zernio' AND s.enabled=1 AND s.zernio_account_id=j.account_id)`;
 async function ready(env: Env, f: string) {
@@ -85,13 +97,15 @@ async function ready(env: Env, f: string) {
     .bind(f, today).first<{ n: number }>();
   return (used?.n || 0) < cfg.daily_limit;
 }
-async function pending(env: Env, f: string) {
-  return env.DB.prepare(`SELECT j.id FROM reply_jobs j WHERE j.firm_id=? AND j.batch_id IS NULL
+async function pending(env: Env, f: string, includeFollowups = false) {
+  return env.DB.prepare(`SELECT j.id,j.kind FROM reply_jobs j WHERE j.firm_id=? AND j.batch_id IS NULL
+    AND (j.kind='reply' OR ?=1)
     AND (j.state='pending' OR (j.state='processing' AND j.lease_until<=?))
     AND ${canProcess}
     AND NOT EXISTS(SELECT 1 FROM reply_jobs active WHERE active.firm_id=j.firm_id AND
       (active.state IN ('sending','processing') AND active.lease_until>?))
-    ORDER BY j.created_at,j.id LIMIT 1`).bind(f, now(), cutoff(), now()).first<{ id: string }>();
+    ORDER BY CASE WHEN j.kind='reply' THEN 0 ELSE 1 END,j.created_at,j.id LIMIT 1`)
+    .bind(f, Number(includeFollowups), now(), cutoff(), now(), now()).first<{ id: string; kind: string }>();
 }
 export async function verifyWebhook(secret: string, raw: string, signature: string) {
   if (!/^[a-f0-9]{64}$/.test(signature)) return false;
@@ -165,6 +179,8 @@ async function delivery(env: Env, f: string, e: Record<string, unknown>) {
 async function recover(env: Env, f: string) {
   // Never retry a dispatch whose result is unknown. Unblock other senders and show it for review.
   await env.DB.batch([
+    env.DB.prepare(`UPDATE reply_jobs SET state='held',review_reason='Stage notification expired',completed_at=?
+      WHERE firm_id=? AND kind='followup' AND state IN ('pending','processing') AND expires_at<=?`).bind(now(), f, now()),
     env.DB.prepare(`UPDATE whatsapp_messages SET status='uncertain' WHERE status='sending' AND id IN
       (SELECT outgoing_id FROM reply_jobs WHERE firm_id=? AND state='sending' AND lease_until<=?)`).bind(f, now()),
     env.DB.prepare(`UPDATE reply_jobs SET state='held' WHERE firm_id=? AND
@@ -179,7 +195,7 @@ export function replyAssistantRoutes(app: App) {
     await recover(c.env, f);
     const row = await c.env.DB.prepare("SELECT enabled,daily_limit,webhook_id,last_event_at,last_poll_at FROM reply_assistant_settings WHERE firm_id=?").bind(f).first();
     const counts = await c.env.DB.prepare("SELECT state,count(*) AS count FROM reply_jobs WHERE firm_id=? GROUP BY state").bind(f).all();
-    const recent = await c.env.DB.prepare(`SELECT j.id,a.name,j.state,j.created_at,j.question,m.status AS delivery_status
+    const recent = await c.env.DB.prepare(`SELECT j.id,a.name,j.state,j.kind,j.review_reason,j.created_at,j.question,m.status AS delivery_status
       FROM reply_jobs j JOIN agents a ON a.id=j.agent_id AND a.firm_id=j.firm_id LEFT JOIN whatsapp_messages m ON m.id=j.outgoing_id
       WHERE j.firm_id=? AND j.batch_id IS NULL ORDER BY j.created_at DESC LIMIT 10`).bind(f).all();
     return c.json({ ...(row || { enabled: 0, daily_limit: 100, webhook_id: null, last_event_at: null, last_poll_at: null }), counts: counts.results, recent: recent.results });
@@ -236,16 +252,17 @@ export function replyAssistantRoutes(app: App) {
   });
   app.get(`${prefix}/poll`, async c => {
     const { f } = worker(c);
-    const wake = await ready(c.env, f) && !!await pending(c.env, f);
+    const wake = await ready(c.env, f) && !!await pending(c.env, f, c.req.query("followups") === "1");
     // An observation timestamp is sufficient; do not fetch the provider or return message contents on idle polls.
     c.executionCtx.waitUntil(c.env.DB.prepare("UPDATE reply_assistant_settings SET last_poll_at=? WHERE firm_id=?").bind(now(), f).run());
     return c.json({ action: wake ? "wake" : "silent", poll_after_seconds: 30 });
   });
   app.post(`${prefix}/claim`, async c => {
     const { f, key } = worker(c);
+    const options = z.object({ include_followups: z.boolean().default(false) }).strict().parse(await c.req.json());
     await recover(c.env, f);
     if (!await ready(c.env, f)) return c.json({ job: null });
-    const candidate = await pending(c.env, f);
+    const candidate = await pending(c.env, f, options.include_followups);
     if (!candidate) return c.json({ job: null });
     const secret = token(), hash = await digest(secret), until = later();
     // Single SQL compare-and-set is the lock. Two simultaneous claim requests cannot both win.
@@ -259,10 +276,10 @@ export function replyAssistantRoutes(app: App) {
       SELECT j.id FROM reply_jobs j JOIN reply_jobs root ON root.id=?
       WHERE j.firm_id=root.firm_id AND j.agent_id=root.agent_id AND j.phone=root.phone
         AND j.account_id=root.account_id AND j.conversation_id=root.conversation_id
-        AND root.attempts=1 AND root.state='processing' AND root.claim_hash=?
+        AND root.kind='reply' AND j.kind='reply' AND root.attempts=1 AND root.state='processing' AND root.claim_hash=?
         AND j.state='pending' AND j.received_at>? ORDER BY j.created_at,j.id LIMIT 4)`)
       .bind(candidate.id, candidate.id, hash, cutoff()).run();
-    return c.json({ job: { id: candidate.id, token: secret, lease_until: until }, instructions: rules });
+    return c.json({ job: { id: candidate.id, token: secret, lease_until: until, kind: candidate.kind }, instructions: candidate.kind === "followup" ? followupInstructions : rules });
   });
   app.get(`${prefix}/jobs/:id`, async c => {
     const job = await authorizedJob(c);
@@ -271,12 +288,12 @@ export function replyAssistantRoutes(app: App) {
     const saved = await c.env.DB.prepare("UPDATE reply_jobs SET context_hash=? WHERE id=? AND claim_hash=? AND state='processing' AND lease_until>? RETURNING id")
       .bind(context.context_version, job.id, job.claim_hash, now()).first();
     if (!saved) fail(409, "Job claim expired or changed.");
-    return c.json({ job_id: job.id, lease_until: job.lease_until, ...context, instructions: rules });
+    return c.json({ job_id: job.id, lease_until: job.lease_until, ...context, instructions: job.kind === "followup" ? followupInstructions : rules });
   });
   app.get(`${prefix}/jobs/:id/status`, async c => {
     const job = await authorizedJob(c, true);
     await recover(c.env, job.firm_id);
-    const result = await c.env.DB.prepare(`SELECT j.state,m.status AS delivery_status FROM reply_jobs j
+    const result = await c.env.DB.prepare(`SELECT j.state,j.kind,j.review_reason,m.status AS delivery_status FROM reply_jobs j
       LEFT JOIN whatsapp_messages m ON m.id=j.outgoing_id WHERE j.id=?`).bind(job.id).first();
     return c.json(result);
   });
@@ -295,14 +312,28 @@ export function replyAssistantRoutes(app: App) {
     }
     if (job.state !== "processing" || !job.lease_until || job.lease_until <= now()) fail(409, "Job claim expired.");
     if (!await ready(c.env, job.firm_id)) fail(409, "Reply assistant is paused or its daily limit is reached.");
-    if (job.received_at <= cutoff()) fail(409, "The reply window has closed. Ask a team member to handle this message.");
+    if (job.kind === "reply" && job.received_at <= cutoff()) fail(409, "The reply window has closed. Ask a team member to handle this message.");
+    if (job.kind === "followup") {
+      await stageContext(c.env, job);
+      if (b.body.length > 1000) fail(400, "Keep stage notifications within 1000 characters.");
+    }
     const s = await connection(c.env, job.firm_id);
     let conversationId = job.conversation_id;
-    // Reconcile opt-outs before the final context/consent check. No template fallback: never start a paid outreach.
+    let template: { name: string; language: string; parameters: string[] } | undefined;
+    // Incoming replies never fall back to outreach. Stage jobs use only the firm's configured approved template.
     if (!s.dry_run) {
-      const checked = await checkZernioRecipient(c.env, s, job.phone, true, job.conversation_id);
-      if (!checked.conversationId) fail(403, "The conversation no longer matches this sender.");
-      conversationId = checked.conversationId;
+      const checked = await checkZernioRecipient(c.env, s, job.phone, job.kind === "reply", job.conversation_id || undefined);
+      if (job.kind === "reply" && !checked.conversationId) fail(403, "The conversation no longer matches this sender.");
+      conversationId = checked.conversationId || "";
+      if (job.kind === "followup" && !checked.replyWindowOpen) {
+        const approved = await followupTemplate(c.env, s);
+        if (!approved) {
+          await c.env.DB.prepare(`UPDATE reply_jobs SET state='held',review_reason='An approved WhatsApp stage template is required',completed_at=?
+            WHERE id=? AND state='processing' AND claim_hash=?`).bind(now(), job.id, job.claim_hash).run();
+          fail(409, "An approved WhatsApp stage template is required. Notification held for review.");
+        }
+        template = { ...approved, parameters: [b.body.replace(/\s+/g, " ")] };
+      }
     }
     const context = await allowedContext(c.env, job);
     if (context.context_version !== b.context_version || job.context_hash !== b.context_version) fail(409, "context_changed: fetch this job again and rewrite the reply.");
@@ -311,24 +342,25 @@ export function replyAssistantRoutes(app: App) {
     // an ambiguous delivery is never automatically sent a second time.
     const claimed = await c.env.DB.prepare(`UPDATE reply_jobs SET state='sending',reply_body=?,outgoing_id=?,completed_at=?,lease_until=?
       WHERE id=? AND firm_id=? AND state='processing' AND claim_hash=? AND lease_until>?
+      AND (kind='reply' OR expires_at>?)
       AND EXISTS(SELECT 1 FROM api_keys k JOIN workspace_members m ON m.user_id=k.user_id AND m.firm_id=k.firm_id
         WHERE k.id=reply_jobs.claim_key_id AND k.firm_id=reply_jobs.firm_id AND k.revoked_at IS NULL AND k.expires_at>?)
       AND EXISTS(SELECT 1 FROM reply_assistant_settings cfg WHERE cfg.firm_id=? AND cfg.enabled=1 AND cfg.context_revision=?
         AND cfg.daily_limit>(SELECT count(*) FROM reply_jobs used WHERE used.firm_id=cfg.firm_id AND used.completed_at>=? AND used.outgoing_id IS NOT NULL))
-      RETURNING id`).bind(b.body, id, stamp, new Date(Date.now()+120_000).toISOString(), job.id, job.firm_id, job.claim_hash, now(), now(), job.firm_id, context.context_revision, stamp.slice(0,10)).first();
+      RETURNING id`).bind(b.body, id, stamp, new Date(Date.now()+120_000).toISOString(), job.id, job.firm_id, job.claim_hash, now(), now(), now(), job.firm_id, context.context_revision, stamp.slice(0,10)).first();
     if (!claimed) fail(409, "Job is no longer available for this reply.");
     await c.env.DB.prepare(`INSERT INTO whatsapp_messages(id,firm_id,phone,direction,body,status,idempotency_key,created_at,actor,conversation_id)
-      VALUES(?,?,?,'outgoing',?,'sending',?,?,'Reply assistant',?)`)
-      .bind(id, job.firm_id, job.phone, b.body, key, stamp, conversationId).run();
+      VALUES(?,?,?,'outgoing',?,'sending',?,?,?,?)`)
+      .bind(id, job.firm_id, job.phone, b.body, key, stamp, job.kind === "followup" ? "Muse stage notification" : "Reply assistant", conversationId).run();
     const result = s.dry_run ? { status: "preview", providerId: null, conversationId }
-      : await sendProvider(c.env, s, job.phone, b.body, `casetrack:${job.firm_id}:${key}`, undefined, conversationId);
+      : await sendProvider(c.env, s, job.phone, b.body, `casetrack:${job.firm_id}:${key}`, template, conversationId || undefined);
     const state = ["accepted", "preview"].includes(result.status) ? "replied" : "held";
     await c.env.DB.batch([
       c.env.DB.prepare("UPDATE whatsapp_messages SET status=?,provider_id=? WHERE id=? AND status='sending'").bind(result.status, result.providerId, id),
       c.env.DB.prepare(`UPDATE whatsapp_messages SET status=COALESCE(
         (SELECT status FROM reply_delivery_receipts WHERE firm_id=? AND provider_id=?),status) WHERE id=?`).bind(job.firm_id, result.providerId, id),
       c.env.DB.prepare("UPDATE reply_jobs SET state=? WHERE id=? OR batch_id=?").bind(state, job.id, job.id),
-      audit(c, "Reply assistant processed a question", `${job.id}: ${result.status}`, "case"),
+      audit(c, job.kind === "followup" ? "Muse processed a stage notification" : "Reply assistant processed a question", `${job.id}: ${result.status}`, "case", job.case_id),
     ]);
     return c.json({ state, message: { id, status: result.status } });
   });

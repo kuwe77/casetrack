@@ -12,6 +12,7 @@ import { openapi } from "./openapi";
 import { ZernioError } from "./zernio";
 import { storeDocument } from "./documents";
 import { replyAssistantRoutes } from "./reply-assistant";
+import { museFollowupRoutes } from "./muse-followups";
 
 type AppEnv = { Bindings: Env; Variables: { identity: Identity } };
 export type AppContext = Context<AppEnv>;
@@ -303,6 +304,7 @@ app.get("/api/v1/documents/:id/download", async c => {
 
 whatsappRoutes(app);
 replyAssistantRoutes(app);
+museFollowupRoutes(app);
 app.notFound(c => c.json({ error: "Endpoint not found." }, 404));
 app.onError((error, c) => {
   if (error instanceof ZernioError) return c.json({error:error.status===404 ? "Conversation not found in this firm's WhatsApp account." : "WhatsApp provider is unavailable or rejected the connection. Check the saved account and credentials."},error.status===404?404:503);

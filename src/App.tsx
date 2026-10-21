@@ -73,6 +73,7 @@ import {
   TextLink,
 } from "./components/ui";
 import { Editor } from "./components/forms";
+import { StageNotifications } from "./components/stage-notifications";
 import { SettingsPage } from "./components/settings-page";
 import { CaseDocuments } from "./components/case-documents";
 import { SignOut } from "./components/auth-gate";
@@ -1858,6 +1859,7 @@ function CaseDetail({
               <ArrowRight size={17} />
             </Button>
           </form>
+          <StageNotifications key={c.id} record={c} agentName={agent?.name}/>
           {c.notes && (
             <div className="case-context">
               <h3>Case notes</h3>

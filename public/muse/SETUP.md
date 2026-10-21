@@ -6,6 +6,9 @@ It exits after each check. Do not schedule an AI chat turn every 30 seconds.
 
 ## One-time setup
 
+Already connected? Keep your existing restricted API token, configuration, User-Agent,
+job state and drafts. Do not recreate the connection or request another key.
+
 1. In CaseTrack → WhatsApp, verify the approved agent numbers and their consent.
 2. Save **Agent replies with Muse**, connect incoming messages, and create a **Muse key**.
    Use only that restricted key, never a general case/inbox API key.
@@ -89,8 +92,9 @@ python3 ~/.config/casetrack/casetrack.py reply --job JOB_ID --file ~/.config/cas
 
 The job chooses the recipient. You cannot supply a phone number or a different
 conversation. CaseTrack checks consent, assignment, the reply window and context again.
-On `409`, fetch `context --job JOB_ID` again and rewrite only if the context is still
-available. Never reuse a stale draft. Limit rewrites/retries to two; leave persistent
+On `409`, check `status --job JOB_ID` first. Stop on held/skipped; only for an active
+processing job fetch `context --job JOB_ID` again and rewrite if context changed.
+Never reuse a stale draft. Limit rewrites/retries to two; leave persistent
 failures for operator review.
 
 If work takes several minutes, extend the claim **before** it expires:
@@ -131,6 +135,53 @@ The helper removes completed active claims/drafts, retaining only the latest com
 claim for status checks. The website keeps job and delivery history. For older jobs,
 use CaseTrack's Recent questions and message log. Keep hook logs small; do not log
 credentials or case data.
+
+## Case-stage notifications (optional, Muse only)
+
+Version `2026-10-21.3` adds explicit support for stage notifications alongside replies.
+This is **not a daily reminder schedule** and does not scan overdue tasks.
+
+1. The owner enables stage notifications in **Settings → Muse agent** and selects a
+   suitable WhatsApp template. The main assistant must also be enabled in WhatsApp.
+2. A signed-in clerk opens a case and uses **Notify agent on progress** to choose
+   stages and customize the text approved for that case's assigned agent. Save the
+   choices before changing the case stage. All stages start off.
+3. Entering a selected stage atomically queues one notification, only for an assigned
+   agent with an enabled, consented WhatsApp number. Repeated saves and revisiting
+   the same stage do not queue it again. Enabling a current/past stage is not retroactive.
+4. Update the existing Muse hook (not a second hook) to:
+
+```sh
+python3 ~/.config/casetrack/casetrack.py poll --include-followups
+```
+
+Use the **stage follow-up prompt** in Settings to replace the worker instructions.
+The existing key and one-worker lock are shared. Idle checks still use zero AI calls.
+Older helpers and `poll` without this flag only claim incoming questions.
+
+Read `kind` in each context. For `reply`, follow the incoming-question instructions
+above. For `followup`, use only `notification.approved_message` to tell the agent
+that their case reached the stated stage. You may polish wording, but do not add
+facts, requests, dates or other cases. Maximum 1000 characters. Save and submit via
+the same job's `reply` command; the server fixes the recipient. Never use general
+APIs to select cases, recipients, templates or create your own follow-ups.
+
+CaseTrack rechecks the rule, current stage, assignment, consent and context before
+sending. Stage/agent changes or disabling a rule cancel unsent notifications.
+Messages expire after 24 hours; held, cancelled or expired jobs require review and
+must never be recreated to force a send. Rule edits invalidate existing drafts.
+Per-case stage history is visible below each stage switch.
+
+Inside the conservatively checked reply window, CaseTrack can send free-form text.
+Outside it, the server uses only the configured, currently approved WhatsApp template
+with one body variable and no other components. Without one the job is held for review;
+do not bypass this restriction. WhatsApp template charges may apply. Notifications
+share the main assistant's daily limit and preview mode; a preview is not delivered.
+
+For a read-only background connectivity check, use `diagnose --include-followups`.
+Do not change live stages or send a test message without the user's instruction.
+Wait for an actual stage event; verify the real hook worker and delivery separately.
+Keep all proxy, approval, timeout and identical-draft recovery rules below.
 
 ## Diagnose a connection failure
 

@@ -84,6 +84,12 @@ const invite = await call(a, "/invitations", { method: "POST", body: { email: me
 ok(invite.status, 201, "owner creates private invitation");
 ok((await call(member, "/invitations/accept", { method: "POST", body: { token: "0".repeat(64) } })).status, 400, "guessed invitation rejected");
 ok((await call(member, "/invitations/accept", { method: "POST", body: { token: invite.data.url.split("#")[1] } })).status, 200, "invited member joins");
+const stageRules = ["documents", "spa", "loan", "redemption", "stamping", "disbursement", "completed", "on_hold"].map(stage => ({ stage, enabled: stage === "stamping", message: `Case has reached ${stage}.` }));
+ok((await call(member, `/cases/${matter.data.id}/stage-notifications`, { method: "PUT", body: { rules: stageRules } })).status, 200, "clerk can configure per-case notification stages");
+ok((await call(member, `/cases/${matter.data.id}/stage-notifications`)).data.rules.filter(r => r.enabled).length, 1, "only explicitly selected stage enabled");
+ok((await call(b, `/cases/${matter.data.id}/stage-notifications`)).status, 404, "stage rules are private to firm");
+ok((await keyCall(muse.data.key, `/cases/${matter.data.id}/stage-notifications`)).status, 403, "Muse cannot read or choose notification rules");
+ok((await call(member, "/whatsapp/assistant/followups/settings", { method: "PUT", body: { enabled: false, template_name: "", template_language: "en" } })).status, 403, "clerk cannot change global messaging connection settings");
 ok((await call(member, "/invitations", { method: "POST", body: { email: "new@example.test" } })).status, 403, "member cannot invite others");
 ok((await call(member, "/keys", { method: "POST", body: { name: "Unauthorized assistant", scopes: ["assistant:reply"] } })).status, 403, "only owner can mint reply keys");
 const mk = await call(member, "/keys", { method: "POST", body: { name: "Member key", scopes: ["cases:read"] } });

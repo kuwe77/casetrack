@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy } from "@phosphor-icons/react";
-import { museSetupPrompt } from "../lib/muse-setup-prompt";
+import { museSetupPrompt, museFollowupPrompt } from "../lib/muse-setup-prompt";
+import { MuseFollowupSettings } from "./muse-followup-settings";
 import { Button } from "./ui/button";
 
 export function MuseSetup() {
+  return <><MuseFollowupSettings/><MusePrompt followups/><div className="mt-8 border-t pt-6"><MusePrompt/></div></>;
+}
+function MusePrompt({ followups = false }: { followups?: boolean }) {
+  const text = followups ? museFollowupPrompt : museSetupPrompt;
+  const id = followups ? "muse-followup-prompt" : "muse-setup";
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -16,7 +22,7 @@ export function MuseSetup() {
   async function copyPrompt() {
     setCopied(false); setError("");
     try {
-      await navigator.clipboard.writeText(museSetupPrompt);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
     } catch {
       setExpanded(true);
@@ -24,21 +30,21 @@ export function MuseSetup() {
     }
   }
 
-  return <section aria-labelledby="muse-setup-heading">
+  return <section aria-labelledby={`${id}-heading`}>
     <header className="settings-section-header">
       <span className="muse-only-label">Muse agent only</span>
-      <h2 id="muse-setup-heading">Set up WhatsApp replies</h2>
-      <p>This prompt is only for Meta Muse agents that already have CaseTrack API access. Copy it into your Muse chat to set up replies for registered property agents.</p>
+      <h2 id={`${id}-heading`}>{followups ? "Set up stage notifications + replies" : "Set up incoming replies only"}</h2>
+      <p>This prompt is only for Meta Muse agents that already have CaseTrack API access. {followups ? "Copy it into Muse to upgrade the existing hook for case-stage updates and incoming replies." : "Use this version if you only want replies to incoming questions."}</p>
     </header>
     <p className="settings-help muse-prompt-help">The prompt reuses your existing connection and includes the latest connection and retry instructions. No API token is included.</p>
     <div className="settings-actions">
-      <Button type="button" onClick={() => void copyPrompt()}>{copied ? <Check size={17}/> : <Copy size={17}/>} {copied ? "Copied" : "Copy prompt"}</Button>
+      <Button type="button" onClick={() => void copyPrompt()}>{copied ? <Check size={17}/> : <Copy size={17}/>} {copied ? "Copied" : followups ? "Copy stage follow-up prompt" : "Copy replies-only prompt"}</Button>
       <span role="status" aria-live="polite">{copied ? "Prompt copied. Paste it into your Muse chat." : ""}</span>
     </div>
     {error && <p role="alert" className="form-error">{error}</p>}
     <details className="muse-prompt-preview" open={expanded} onToggle={e => setExpanded(e.currentTarget.open)}>
       <summary>View full prompt</summary>
-      <textarea ref={prompt} aria-label="Muse agent setup prompt" readOnly value={museSetupPrompt} spellCheck={false}/>
+      <textarea ref={prompt} aria-label={followups ? "Muse stage follow-up prompt" : "Muse agent setup prompt"} readOnly value={text} spellCheck={false}/>
     </details>
   </section>;
 }

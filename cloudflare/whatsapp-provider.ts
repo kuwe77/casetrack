@@ -44,7 +44,7 @@ export async function checkZernioRecipient(env: Env, s: Settings, phone: string,
     : await client.findPhone(phone);
   if (!conversation) {
     if (requireReply) fail(400, "An approved WhatsApp template is required to start this conversation.");
-    return {client,conversationId:undefined};
+    return {client,conversationId:undefined,replyWindowOpen:false};
   }
   const matchesPhone = (value: string) => value.replace(/\D/g, "") === phone.replace(/\D/g, "");
   if (!matchesPhone(conversation.participantId)) fail(403, "The conversation no longer matches this sender.");
@@ -69,7 +69,7 @@ export async function checkZernioRecipient(env: Env, s: Settings, phone: string,
   const allowed = await env.DB.prepare("SELECT agent_id FROM whatsapp_contacts WHERE firm_id=? AND phone=? AND enabled=1 AND consent=1").bind(s.firm_id,phone).first();
   if (!allowed) fail(403,"The recipient has opted out of WhatsApp messages.");
   if (requireReply && !recentIncoming) fail(400,"An approved WhatsApp template is required outside the reply window.");
-  return {client,conversationId:conversation.id};
+  return {client,conversationId:conversation.id,replyWindowOpen:recentIncoming};
 }
 export async function sendProvider(env: Env, s: Settings, phone: string, body: string, key: string,
   template?: {name:string;language:string;parameters:string[]}, conversationId?:string, fetcher:typeof fetch=fetch) {

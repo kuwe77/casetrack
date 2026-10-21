@@ -20,7 +20,7 @@ ROOT = Path(os.environ.get("CASETRACK_HOME", "~/.config/casetrack")).expanduser(
 ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
 JOB = ROOT / "job.json"
 LAST = ROOT / "last-result.json"
-VERSION = "2026-10-21.2"
+VERSION = "2026-10-21.3"
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -145,7 +145,7 @@ def api(route, method="GET", data=None, claim=None, diagnostics=False):
         error.close()
         message = "CaseTrack request failed (HTTP %s)." % error.code
         if error.code == 409:
-            message += " Refresh this job's context and rewrite if context_changed; otherwise leave it for review."
+            message += " Check this job's status. Stop on held/skipped; refresh context and rewrite only for an active processing job with context_changed. Otherwise leave it for review."
         if error.code == 401:
             message += " Renew the restricted key in CaseTrack."
         raise RuntimeError(message + " Diagnostic: " + diagnostic(error)) from None
@@ -168,7 +168,7 @@ def claim_for(job_id, allow_completed=False):
     return claim
 
 
-def poll():
+def poll(include_followups=False):
     # One fast check per hook, with no background process and no model SDK.
     with (ROOT / "poll.lock").open("w") as lock:
         try:
@@ -177,9 +177,9 @@ def poll():
             return "silent"
         if JOB.exists() and expires(read_json(JOB)["lease_until"]) > time.time():
             return "silent"
-        if api("/poll")["action"] != "wake":
+        if api("/poll?followups=1" if include_followups else "/poll")["action"] != "wake":
             return "silent"
-        result = api("/claim", "POST", {})
+        result = api("/claim", "POST", {"include_followups": True} if include_followups else {})
         if not result.get("job"):
             return "silent"
         # Persist the claim before waking Muse. A lost response/file is recoverable after the server lease.
@@ -190,8 +190,8 @@ def poll():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("poll")
-    commands.add_parser("diagnose", help="One read-only poll with safe transport details; never claims a job")
+    commands.add_parser("poll").add_argument("--include-followups", action="store_true", help="Process enabled case-stage notifications as well as replies")
+    commands.add_parser("diagnose", help="One read-only poll with safe transport details; never claims a job").add_argument("--include-followups", action="store_true")
     context = commands.add_parser("context")
     context.add_argument("--job")
     for name in ("heartbeat", "skip", "reply", "status"):
@@ -201,10 +201,10 @@ def main():
             command.add_argument("--file", required=True, help="Private JSON file with body and context_version")
     args = parser.parse_args()
     if args.command == "diagnose":
-        api("/poll", diagnostics=True)
+        api("/poll?followups=1" if args.include_followups else "/poll", diagnostics=True)
         return
     if args.command == "poll":
-        print(poll())
+        print(poll(args.include_followups))
         return
     claim = claim_for(args.job, args.command == "status") if args.job else read_json(JOB)
     route = "/jobs/" + urllib.parse.quote(claim["id"], safe="")

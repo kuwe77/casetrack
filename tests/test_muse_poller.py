@@ -36,6 +36,21 @@ class PollerTest(unittest.TestCase):
             api.assert_called_once_with("/poll")
             self.assertFalse(self.module.JOB.exists())
 
+    def test_followup_capability_is_explicit_and_keeps_one_worker(self):
+        claim = dict(self.claim, kind="followup")
+        with patch.object(self.module, "api", side_effect=[{"action": "wake"}, {"job": claim}]) as api:
+            self.assertEqual(self.module.poll(True), "wake")
+            self.assertEqual(api.call_args_list[0].args, ("/poll?followups=1",))
+            self.assertEqual(api.call_args_list[1].args, ("/claim", "POST", {"include_followups": True}))
+            self.assertEqual(self.module.read_json(self.module.JOB)["kind"], "followup")
+            self.assertEqual(self.module.poll(True), "silent")
+            self.assertEqual(api.call_count, 2)
+
+    def test_followup_diagnose_never_claims(self):
+        with patch.object(sys, "argv", ["casetrack.py", "diagnose", "--include-followups"]), patch.object(self.module, "api") as api:
+            self.module.main()
+            api.assert_called_once_with("/poll?followups=1", diagnostics=True)
+
     def test_claim_persisted_before_one_wake_then_silent_without_network(self):
         with patch.object(self.module, "api", side_effect=[{"action": "wake"}, {"job": self.claim}]) as api:
             self.assertEqual(self.module.poll(), "wake")
