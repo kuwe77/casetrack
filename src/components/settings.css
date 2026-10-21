@@ -72,6 +72,12 @@
 .api-key-permissions summary, .api-revoked-keys > summary { cursor: pointer; padding-block: 5px; color: var(--muted-foreground); }
 .api-key-permissions ul { display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; margin: 8px 0 0; padding: 0; }
 .api-revoked-keys { margin-top: 12px; font-size: 13px; }
+.muse-only-label { display: inline-block; margin-bottom: 12px; padding: 4px 9px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted-foreground); font-size: 12px; font-weight: 500; }
+.muse-prompt-help { max-width: 66ch; margin-bottom: 18px; }
+.muse-prompt-preview { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
+.muse-prompt-preview summary { width: fit-content; padding-block: 6px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.muse-prompt-preview textarea { display: block; width: 100%; height: 360px; min-height: 220px; margin-top: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); color: var(--foreground); font: inherit; font-size: 13px; line-height: 1.7; resize: vertical; }
+.muse-prompt-preview textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 @media (max-width: 700px) {
   .settings-tabs { flex-wrap: wrap; overflow: visible; gap: 4px; }
   .settings-section { padding: 22px 20px; }

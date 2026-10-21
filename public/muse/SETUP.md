@@ -127,7 +127,7 @@ credentials or case data.
 Helper version `2026-10-21.2` adds proxy CONNECT diagnostics and a configurable
 User-Agent to the safe transport diagnostics introduced in `2026-10-21.1`. Update the helper from
 the setup URL while preserving your existing configuration, saved job/draft, Muse
-hook, proxy-loading wrapper and timeout guard. If you customized the Python file,
+hook and timeout guard. If you customized the Python file,
 merge the diagnostic changes instead of overwriting your local modifications.
 Updating the website does not update the helper already installed on Muse's VM.
 
@@ -139,7 +139,15 @@ the file. The default is `CaseTrack-Muse/<version>`. Values must be printable AS
 at most 512 characters, with no line breaks. This avoids patching the Python source
 after every update. Diagnostics report only `user_agent_source`, never its value.
 
-Run this through **the same proxy-loading wrapper and environment as the worker**:
+Each execution must use the current proxy settings supplied to it through Muse's
+supported execution mechanism. **Do not save proxy passwords for another execution,
+load another execution's saved proxy credentials, or overwrite freshly supplied
+settings with a cached file.** Replaying saved credentials caused proxy HTTP 407
+errors in this setup. Do not bypass Sentinel or its approval controls. If background
+workers cannot obtain valid proxy access, report that limitation to Muse support.
+
+Run this through **the same supported execution mechanism as the actual worker**,
+with that execution's own current proxy settings and the timeout guard:
 
 ```sh
 python3 ~/.config/casetrack/casetrack.py diagnose
