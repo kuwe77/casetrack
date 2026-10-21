@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { FormEvent } from "react";
 import {
   SquaresFour,
   FolderSimple,
@@ -10,7 +9,6 @@ import {
   MagnifyingGlass,
   Plus,
   ArrowUpRight,
-  ArrowRight,
   Export,
   CaretDown,
   CaretRight,
@@ -49,7 +47,6 @@ import {
   dateLabel,
   isOverdue,
   isTaskDue,
-  money,
   compactMoney,
   caseMatches,
   downloadCsv,
@@ -73,9 +70,8 @@ import {
   TextLink,
 } from "./components/ui";
 import { Editor } from "./components/forms";
-import { StageNotifications } from "./components/stage-notifications";
+import { CaseDetail } from "./components/case-detail";
 import { SettingsPage } from "./components/settings-page";
-import { CaseDocuments } from "./components/case-documents";
 import { SignOut } from "./components/auth-gate";
 import { WhatsAppPage } from "./components/whatsapp-page";
 import { WorkspaceSetup } from "./components/workspace-setup";
@@ -91,7 +87,6 @@ import {
 } from "./components/ui/table";
 import { Card } from "./components/ui/card";
 import { Input } from "./components/ui/input";
-import { Textarea } from "./components/ui/textarea";
 
 type Page =
   | "overview"
@@ -1692,254 +1687,5 @@ function ActivityPage({
         </div>
       </Card>
     </>
-  );
-}
-function CaseDetail({
-  c,
-  w,
-  onClose,
-  onEdit,
-  onSave,
-  onNote,
-  onTask,
-}: {
-  c: CaseRecord;
-  w: Workspace;
-  onClose: () => void;
-  onEdit: () => void;
-  onSave: (c: CaseRecord) => Promise<void>;
-  onNote: (note: string) => Promise<void>;
-  onTask: (t: FollowUp) => void;
-}) {
-  const [tab, setTab] = useState("overview"),
-    [status, setStatus] = useState(c.status),
-    [next, setNext] = useState(c.next_step),
-    [note, setNote] = useState(""),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  useEffect(() => {
-    setStatus(c.status);
-    setNext(c.next_step);
-  }, [c.status, c.next_step]);
-  const agent = w.agents.find((a) => a.id === c.agent_id),
-    events = w.activities.filter((a) => a.case_id === c.id),
-    tasks = w.tasks.filter((t) => t.case_id === c.id);
-  async function progress(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      if (!next.trim()) throw Error("Add a next step for this case.");
-      await onSave({
-        ...c,
-        status,
-        next_step: next.trim(),
-        updated_at: new Date().toISOString(),
-      });
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <Modal
-      open
-      onClose={() => !busy && onClose()}
-      title={c.ref}
-      description={`${c.type} · Updated ${dateLabel(c.updated_at)}`}
-      drawer
-    >
-      <div className="detail-hero">
-        <span className="detail-property-icon">
-          <HouseLine size={32} weight="light" />
-        </span>
-        <h2>{c.buyer}</h2>
-        <p>{c.property}</p>
-        <div>
-          <Badge status={c.status} />
-          {c.priority === "high" && (
-            <span className="priority-label">
-              <WarningCircle size={14} />
-              High priority
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="detail-tabs tabs">
-        {[
-          ["overview", "Overview"],
-          ["timeline", `Timeline (${events.length})`],
-        ].map(([id, label]) => (
-          <Button
-            variant="ghost"
-            key={id}
-            className={tab === id ? "selected" : ""}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </Button>
-        ))}
-        <Button variant="ghost" className="detail-edit" onClick={onEdit}>
-          <PencilSimple size={15} />
-          Edit case
-        </Button>
-      </div>
-      {tab === "overview" ? (
-        <div className="detail-body">
-          <div className="detail-facts">
-            <div>
-              <span>Person in charge</span>
-              <strong className="person">
-                <Avatar name={c.owner} small />
-                {c.owner}
-              </strong>
-            </div>
-            <div>
-              <span>Assigned agent</span>
-              <AgentName agent={agent} />
-            </div>
-            <div>
-              <span>Target completion</span>
-              <strong className={isOverdue(c) ? "overdue" : ""}>
-                {dateLabel(c.due_date, true)}
-                {isOverdue(c) && " · Overdue"}
-              </strong>
-            </div>
-            <div>
-              <span>Property value</span>
-              <strong>{money(c.value)}</strong>
-            </div>
-            <div>
-              <span>Seller</span>
-              <strong>{c.seller || "Not provided"}</strong>
-            </div>
-            <div>
-              <span>Opened</span>
-              <strong>{dateLabel(c.created_at, true)}</strong>
-            </div>
-          </div>
-          <CaseDocuments caseId={c.id} />
-          <form className="progress-form" onSubmit={progress}>
-            <div className="section-heading">
-              <h3>Move the matter forward</h3>
-              <span className="small-orbit" />
-            </div>
-            <label className="field">
-              <span>Current milestone</span>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as Stage)}
-              >
-                {stages.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.full}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Next step</span>
-              <Textarea
-                aria-label="Next step"
-                value={next}
-                onChange={(e) => setNext(e.target.value)}
-                rows={2}
-                required
-                maxLength={500}
-              />
-            </label>
-            {error && <p className="form-error">{error}</p>}
-            <Button
-              variant="ghost"
-              className="button button-primary"
-              disabled={busy || (status === c.status && next === c.next_step)}
-            >
-              {busy ? "Saving…" : "Update progress"}
-              <ArrowRight size={17} />
-            </Button>
-          </form>
-          <StageNotifications key={c.id} record={c} agentName={agent?.name}/>
-          {c.notes && (
-            <div className="case-context">
-              <h3>Case notes</h3>
-              <p>{c.notes}</p>
-            </div>
-          )}
-          {tasks.length > 0 && (
-            <div className="detail-followups">
-              <h3>Related follow-ups</h3>
-              {tasks.map((t) => (
-                <TaskLine
-                  key={t.id}
-                  task={t}
-                  onToggle={() => onTask(t)}
-                  onOpen={() => setTab("timeline")}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="detail-body">
-          <form
-            className="note-form"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (!note.trim()) return;
-              setBusy(true);
-              setError("");
-              try {
-                await onNote(note.trim());
-                setNote("");
-              } catch (e) {
-                setError(errorMessage(e));
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <label className="field">
-              <span>Add an internal note</span>
-              <Textarea
-                aria-label="Add an internal note"
-                rows={3}
-                placeholder="Keep your team in the loop…"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                required
-                maxLength={5000}
-              />
-            </label>
-            {error && <p className="form-error">{error}</p>}
-            <Button
-              variant="ghost"
-              className="button button-primary"
-              disabled={busy || !note.trim()}
-            >
-              {busy ? "Adding…" : "Add note"}
-              <Plus size={17} />
-            </Button>
-          </form>
-          <div className="detail-timeline">
-            {events.map((a) => (
-              <div className="timeline-event" key={a.id}>
-                <span />
-                <div>
-                  <small>
-                    {dateLabel(a.created_at)} · {a.actor}
-                  </small>
-                  <h3>{a.title}</h3>
-                  <p>{a.detail}</p>
-                </div>
-              </div>
-            ))}
-            {!events.length && (
-              <p className="muted">No updates recorded yet.</p>
-            )}
-          </div>
-        </div>
-      )}
-    </Modal>
   );
 }
