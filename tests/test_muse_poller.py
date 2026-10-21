@@ -1,6 +1,7 @@
 """Run on Linux: python3 tests/test_muse_poller.py. No network or model calls."""
 import contextlib
 import errno
+import http.server
 import importlib.util
 import io
 import json
@@ -10,6 +11,7 @@ import sys
 import socket
 import ssl
 import tempfile
+import threading
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
@@ -21,6 +23,7 @@ class PollerTest(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.environment = patch.dict(os.environ, {"CASETRACK_HOME": self.directory.name})
         self.environment.start()
+        os.environ.pop("CASETRACK_USER_AGENT", None)
         self.addCleanup(self.environment.stop)
         spec = importlib.util.spec_from_file_location("casetrack_helper", Path(__file__).resolve().parents[1] / "public/muse/casetrack.py")
         self.module = importlib.util.module_from_spec(spec)
@@ -219,6 +222,79 @@ class PollerTest(unittest.TestCase):
             details = self.module.proxy_details({"https": "http://PRIVATE-PROXY"}, "example.test")
         self.assertEqual(details["proxy_mode"], "bypass")
         self.assertNotIn("proxy_endpoint_id", details)
+
+    def test_real_connect_rejections_report_proxy_status_without_origin_status(self):
+        # Local proxy socket only: it refuses CONNECT and never contacts an origin.
+        self.module.write_json(self.module.ROOT / "config.json", {"url": "https://example.test", "key": "PRIVATE-API-KEY"})
+        for status in (403, 407, 502):
+            with self.subTest(status=status):
+                received = []
+                class RejectProxy(http.server.BaseHTTPRequestHandler):
+                    def do_CONNECT(handler):
+                        received.append(handler.command)
+                        handler.send_response(status, "PRIVATE-PROXY-REASON")
+                        handler.send_header("CF-Ray", "a4dc54eaf852c5e9-IAD")
+                        handler.end_headers()
+                    def log_message(handler, *args):
+                        pass
+                with http.server.HTTPServer(("127.0.0.1", 0), RejectProxy) as server:
+                    server.timeout = 3
+                    thread = threading.Thread(target=server.handle_request, daemon=True)
+                    thread.start()
+                    try:
+                        with patch.object(self.module.urllib.request, "getproxies", return_value={"https": "http://127.0.0.1:%d" % server.server_port}), \
+                             patch.object(self.module.urllib.request, "proxy_bypass", return_value=False), \
+                             self.assertRaises(RuntimeError) as caught:
+                            self.module.api("/poll")
+                    finally:
+                        thread.join(timeout=4)
+                self.assertFalse(thread.is_alive())
+                self.assertEqual(received, ["CONNECT"])
+                message = str(caught.exception)
+                details = json.loads(message.split("Diagnostic: ")[1])
+                self.assertEqual(details["error_type"], "URLError")
+                self.assertEqual(details["cause_type"], "OSError")
+                self.assertEqual(details["phase"], "proxy_connect")
+                self.assertEqual(details["proxy_http_status"], status)
+                self.assertIsNone(details["http_status"])
+                self.assertNotIn("errno", details)
+                self.assertNotIn("cf_ray", details)
+                self.assertNotIn("PRIVATE", message)
+
+    def test_unrecognized_oserror_text_remains_private_and_unclassified(self):
+        error = self.module.urllib.error.URLError(OSError("PRIVATE failure with code 407"))
+        details = self.module.failure_details(error)
+        self.assertEqual(details, {"error_type": "URLError", "cause_type": "OSError"})
+
+    def test_user_agent_default_config_and_environment_are_sent_not_logged(self):
+        for source in ("default", "config", "environment"):
+            with self.subTest(source=source):
+                opener = self.transport(response=self.response())
+                config = self.module.read_json(self.module.ROOT / "config.json")
+                if source != "default":
+                    config["user_agent"] = "PRIVATE-CONFIG-AGENT"
+                    self.module.write_json(self.module.ROOT / "config.json", config)
+                environment = {"CASETRACK_USER_AGENT": "PRIVATE-ENV-AGENT"} if source == "environment" else {}
+                errors = io.StringIO()
+                with patch.dict(os.environ, environment), contextlib.redirect_stderr(errors):
+                    self.module.api("/poll", diagnostics=True)
+                expected = {"default": "CaseTrack-Muse/" + self.module.VERSION, "config": "PRIVATE-CONFIG-AGENT", "environment": "PRIVATE-ENV-AGENT"}[source]
+                self.assertEqual(opener.open.call_args.args[0].get_header("User-agent"), expected)
+                details = json.loads(errors.getvalue().split("CaseTrack transport: ")[1])
+                self.assertEqual(details["user_agent_source"], source)
+                self.assertNotIn("PRIVATE", errors.getvalue())
+
+    def test_invalid_user_agents_fail_before_network_without_echoing_value(self):
+        for agent in ("PRIVATE\r\nAuthorization: injected", "PRIVATE\x00", "PRIVATE\u00e9", "", "x" * 513, 12):
+            with self.subTest(agent_type=type(agent).__name__):
+                opener = self.transport()
+                config = self.module.read_json(self.module.ROOT / "config.json")
+                config["user_agent"] = agent
+                self.module.write_json(self.module.ROOT / "config.json", config)
+                with self.assertRaises(RuntimeError) as caught:
+                    self.module.api("/poll")
+                self.assertNotIn("PRIVATE", str(caught.exception))
+                opener.open.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ ROOT = Path(os.environ.get("CASETRACK_HOME", "~/.config/casetrack")).expanduser(
 ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
 JOB = ROOT / "job.json"
 LAST = ROOT / "last-result.json"
-VERSION = "2026-10-21.1"
+VERSION = "2026-10-21.2"
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -62,6 +62,12 @@ def failure_details(error):
     # Exception messages/reasons can contain proxy URLs, credentials or response bodies.
     cause = error.reason if isinstance(error, urllib.error.URLError) and isinstance(error.reason, BaseException) else error
     details = {"error_type": type(error).__name__, "cause_type": type(cause).__name__}
+    # CPython's CONNECT rejection is OSError(text), with no errno or HTTPError.
+    # Extract only its numeric status; the proxy's reason text remains private.
+    if isinstance(cause, OSError) and cause.args and isinstance(cause.args[0], str):
+        tunnel = re.match(r"\ATunnel connection failed: ([1-5][0-9]{2})(?:\s|$)", cause.args[0])
+        if tunnel:
+            details.update(phase="proxy_connect", proxy_http_status=int(tunnel.group(1)))
     number = getattr(cause, "errno", None)
     if isinstance(number, int):
         details["errno"] = number
@@ -81,6 +87,14 @@ def response_details(response):
     return details
 
 
+def user_agent(config):
+    source = "environment" if "CASETRACK_USER_AGENT" in os.environ else "config" if "user_agent" in config else "default"
+    value = os.environ.get("CASETRACK_USER_AGENT") if source == "environment" else config.get("user_agent", "CaseTrack-Muse/" + VERSION)
+    if not isinstance(value, str) or not value.strip() or len(value) > 512 or any(ord(c) < 32 or ord(c) > 126 for c in value):
+        raise RuntimeError("User-Agent must be 1–512 printable ASCII characters without line breaks.")
+    return value, source
+
+
 def api(route, method="GET", data=None, claim=None, diagnostics=False):
     config_path = ROOT / "config.json"
     if config_path.stat().st_mode & 0o077:
@@ -90,7 +104,8 @@ def api(route, method="GET", data=None, claim=None, diagnostics=False):
     parsed = urllib.parse.urlsplit(base)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/"):
         raise RuntimeError("Configure the HTTPS website origin only.")
-    headers = {"Authorization": "Bearer " + config["key"], "Accept": "application/json"}
+    agent, agent_source = user_agent(config)
+    headers = {"Authorization": "Bearer " + config["key"], "Accept": "application/json", "User-Agent": agent}
     if claim:
         headers["X-Job-Token"] = claim["token"]
     raw = None
@@ -101,7 +116,7 @@ def api(route, method="GET", data=None, claim=None, diagnostics=False):
     started = time.monotonic()
     detail = {"helper_version": VERSION, "timestamp_utc": datetime.now(timezone.utc).isoformat(),
               "method": method, "route": re.sub(r"/jobs/[^/]+", "/jobs/:id", route.split("?")[0]),
-              "phase": "proxy_config", "http_status": None}
+              "phase": "proxy_config", "http_status": None, "user_agent_source": agent_source}
     def diagnostic(error=None):
         return json.dumps({**detail, "elapsed_ms": round((time.monotonic() - started) * 1000),
                            **(failure_details(error) if error else {})}, sort_keys=True)

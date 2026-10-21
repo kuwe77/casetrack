@@ -124,11 +124,20 @@ credentials or case data.
 
 ## Diagnose a connection failure
 
-Helper version `2026-10-21.1` adds safe transport diagnostics. Update the helper from
+Helper version `2026-10-21.2` adds proxy CONNECT diagnostics and a configurable
+User-Agent to the safe transport diagnostics introduced in `2026-10-21.1`. Update the helper from
 the setup URL while preserving your existing configuration, saved job/draft, Muse
 hook, proxy-loading wrapper and timeout guard. If you customized the Python file,
 merge the diagnostic changes instead of overwriting your local modifications.
 Updating the website does not update the helper already installed on Muse's VM.
+
+If your environment requires a particular User-Agent, preserve your already-working
+value in the existing private `config.json` as `user_agent`, alongside the existing
+`url` and `key`. Do not replace those credentials. Alternatively, set
+`CASETRACK_USER_AGENT` in the worker's wrapper environment; it takes precedence over
+the file. The default is `CaseTrack-Muse/<version>`. Values must be printable ASCII,
+at most 512 characters, with no line breaks. This avoids patching the Python source
+after every update. Diagnostics report only `user_agent_source`, never its value.
 
 Run this through **the same proxy-loading wrapper and environment as the worker**:
 
@@ -148,6 +157,15 @@ response headers were received, including a subsequent body-read failure. The
 helper cannot separately measure DNS, TCP and TLS timings; use the existing curl
 capture for that breakdown. No response headers other than the validated ray ID,
 exception messages, bodies, credentials or case contents are logged.
+
+Python reports a failed proxy CONNECT as an `OSError` with no errno, even when the
+proxy returned an HTTP error. Version `2026-10-21.2` recognizes that standard error
+format and reports `phase: proxy_connect` plus the numeric `proxy_http_status`
+(for example 403, 407 or 502). The origin's `http_status` stays null, and no proxy
+header is misrepresented as an origin `CF-Ray`. Only the numeric code is extracted;
+the proxy's reason text is not logged. Other OSErrors remain unclassified rather
+than guessing the cause. Origin User-Agent changes do not change the CONNECT
+request, and a missing ray ID alone does not prove which service rejected it.
 
 Proxy diagnostics show whether urllib detected an HTTPS proxy, bypassed it, or
 used a direct connection. A short hash identifies the proxy endpoint without
