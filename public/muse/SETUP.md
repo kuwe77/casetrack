@@ -117,6 +117,16 @@ CaseTrack will return the recorded result without sending it again. `held`,
 An unresolved send releases the firm lock after two minutes but is never retried
 automatically. Three unsuccessful processing claims also move the job to review.
 
+If `context`, `status` or `diagnose` times out while connecting, retry that command
+**once within the same worker execution** before reporting failure. Keep the
+timeout guard and preserve the saved job and draft; do not wake another AI worker
+just to retry connectivity. Do not blindly retry a claim or `poll` (which can claim
+work): the server may already have processed it despite the missing response.
+For a reply timeout, check status and use only the same-job, identical-draft
+recovery above. Approval blocks and HTTP 401, 403 or 407 responses are not connection
+timeouts; report them instead of repeatedly retrying. The helper itself does not
+add automatic retries.
+
 The helper removes completed active claims/drafts, retaining only the latest completed
 claim for status checks. The website keeps job and delivery history. For older jobs,
 use CaseTrack's Recent questions and message log. Keep hook logs small; do not log
@@ -145,6 +155,12 @@ load another execution's saved proxy credentials, or overwrite freshly supplied
 settings with a cached file.** Replaying saved credentials caused proxy HTTP 407
 errors in this setup. Do not bypass Sentinel or its approval controls. If background
 workers cannot obtain valid proxy access, report that limitation to Muse support.
+
+Access to `casetrack.pages.dev` may raise another Muse approval prompt even after
+the user selects "Always allow." A repeated card alone does not mean setup failed.
+Pause the blocked operation, report that approval is pending, and wait for the
+user's decision. Do not loop retrying blocked calls or assume a previous approval
+authorizes the current request.
 
 Run this through **the same supported execution mechanism as the actual worker**,
 with that execution's own current proxy settings and the timeout guard:

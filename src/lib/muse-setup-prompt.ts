@@ -8,7 +8,7 @@ https://casetrack.pages.dev/muse/SETUP.md
 Official lightweight helper:
 https://casetrack.pages.dev/muse/casetrack.py
 
-1. Configure the background hook
+Section 1: Configure the background hook
 
 Use Muse’s supported script hook to run the helper every 30 seconds:
 - “silent” → finish without an AI call.
@@ -19,7 +19,7 @@ Use Muse’s supported script hook to run the helper every 30 seconds:
 
 Use Python’s standard library. Do not install a daemon, browser, container or local model.
 
-2. Handle network credentials correctly
+Section 2: Handle network credentials correctly
 
 This setup previously encountered proxy HTTP 407 errors because proxy credentials were saved by one execution and reused by another.
 
@@ -35,7 +35,9 @@ These rules take precedence over older guide wording about preserving a proxy-lo
 
 If a worker lacks valid proxy access, report that specific limitation. Do not substitute credentials copied from the poller or assume shell success proves worker access.
 
-3. Process each question safely
+Access to casetrack.pages.dev may raise another Muse approval prompt even after the user selects “Always allow.” A repeated approval card alone does not mean setup failed. Pause the blocked operation, report that approval is pending, and wait for the user’s decision. Do not loop retrying blocked calls or assume a previous approval authorizes the current request.
+
+Section 3: Process each question safely
 
 Use the official helper to claim and persist the job before waking AI.
 
@@ -51,7 +53,9 @@ Follow the guide’s claim, heartbeat, retry and delivery-status rules. Preserve
 
 Do not regenerate a completed answer merely because transmission failed. If a reply response is lost, check status and follow the identical-draft retry procedure. If context changed, fetch fresh context before rewriting. Never automatically resend a held, failed or uncertain message as a new job.
 
-4. Verify and report honestly
+If context, status or diagnose times out while connecting, retry that helper command once within the same worker execution before reporting failure. Keep the timeout guard and preserve the saved job and draft; do not start another AI worker merely to retry connectivity. A claim or reply timeout may hide a completed server operation: do not blindly retry a claim or the poll command that can claim work. For a reply, check status and follow the same-job, identical-draft recovery above. Approval blocks and HTTP 401, 403 or 407 responses are not connection timeouts; report them instead of repeatedly retrying.
+
+Section 4: Verify and report honestly
 
 Test connectivity from a real background execution, not only your interactive shell.
 
