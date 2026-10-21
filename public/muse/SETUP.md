@@ -122,6 +122,46 @@ claim for status checks. The website keeps job and delivery history. For older j
 use CaseTrack's Recent questions and message log. Keep hook logs small; do not log
 credentials or case data.
 
+## Diagnose a connection failure
+
+Helper version `2026-10-21.1` adds safe transport diagnostics. Update the helper from
+the setup URL while preserving your existing configuration, saved job/draft, Muse
+hook, proxy-loading wrapper and timeout guard. If you customized the Python file,
+merge the diagnostic changes instead of overwriting your local modifications.
+Updating the website does not update the helper already installed on Muse's VM.
+
+Run this through **the same proxy-loading wrapper and environment as the worker**:
+
+```sh
+python3 ~/.config/casetrack/casetrack.py diagnose
+```
+
+This makes one authenticated poll, reports diagnostics on stderr, and exits. It
+never claims a job or prints `wake`, even if work is waiting. Successful ordinary
+polls remain quiet except for the hook's `silent` / `wake` output.
+
+API failures now include a UTC timestamp, helper version, method, route with job
+IDs removed, elapsed milliseconds, exception/cause types and numeric errno when
+available. The phase distinguishes waiting for a connection/headers, reading the
+body and decoding JSON. HTTP status and a validated `CF-Ray` are retained whenever
+response headers were received, including a subsequent body-read failure. The
+helper cannot separately measure DNS, TCP and TLS timings; use the existing curl
+capture for that breakdown. No response headers other than the validated ray ID,
+exception messages, bodies, credentials or case contents are logged.
+
+Proxy diagnostics show whether urllib detected an HTTPS proxy, bypassed it, or
+used a direct connection. A short hash identifies the proxy endpoint without
+revealing its address or credentials; it does not identify a rotating exit IP.
+`ALL_PROXY` alone does not configure urllib's HTTPS handler. Compare with curl
+using the same `HTTPS_PROXY`/`https_proxy` and `NO_PROXY`/`no_proxy` environment;
+lowercase proxy variables take precedence. Do not print the variable values.
+
+Failures do not automatically retry, clear the saved job/draft, or wake the model.
+A lost claim/reply response can mean the server completed the request: preserve
+state and follow the status/identical-reply guidance above. A failure with no
+response has no ray ID and does not by itself locate the fault in the client,
+proxy, network or server.
+
 ## First live test
 
 After the hook is enabled, an approved property agent sends “What are my cases?”

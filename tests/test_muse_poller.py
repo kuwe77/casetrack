@@ -1,15 +1,18 @@
 """Run on Linux: python3 tests/test_muse_poller.py. No network or model calls."""
 import contextlib
+import errno
 import importlib.util
 import io
 import json
 import os
 from pathlib import Path
 import sys
+import socket
+import ssl
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 class PollerTest(unittest.TestCase):
@@ -81,6 +84,141 @@ class PollerTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.module.api("/poll")
         self.assertIsNone(self.module.NoRedirect().redirect_request(None, None, None, None, None, None))
+
+    def transport(self, response=None, error=None):
+        self.module.write_json(self.module.ROOT / "config.json", {"url": "https://example.test", "key": "PRIVATE-API-KEY"})
+        opener = MagicMock()
+        if error:
+            opener.open.side_effect = error
+        else:
+            opener.open.return_value = response
+        patched = patch.object(self.module.urllib.request, "build_opener", return_value=opener)
+        patched.start()
+        self.addCleanup(patched.stop)
+        return opener
+
+    def response(self, body=b'{}', ray="a4dc54eaf852c5e9-IAD"):
+        response = io.BytesIO(body)
+        response.code = 200
+        response.headers = {"CF-Ray": ray, "Set-Cookie": "PRIVATE-COOKIE"}
+        return response
+
+    def test_network_errors_reveal_type_and_errno_without_secrets_or_job_id(self):
+        for reason in [TimeoutError("PRIVATE-PROXY"), ConnectionResetError(errno.ECONNRESET, "PRIVATE-PROXY"),
+                       socket.gaierror(socket.EAI_AGAIN, "PRIVATE-PROXY"), ssl.SSLError("PRIVATE-PROXY")]:
+            with self.subTest(type=type(reason).__name__):
+                opener = self.transport(error=self.module.urllib.error.URLError(reason))
+                with patch.object(self.module.urllib.request, "getproxies", return_value={"https": "http://PRIVATE-USER:PRIVATE-PASSWORD@proxy.test:8080"}), \
+                     patch.object(self.module.urllib.request, "proxy_bypass", return_value=False), \
+                     self.assertRaises(RuntimeError) as caught:
+                    self.module.api("/jobs/PRIVATE-JOB", claim=self.claim)
+                message = str(caught.exception)
+                details = json.loads(message.split("Diagnostic: ")[1])
+                self.assertEqual(details["phase"], "connect_or_headers")
+                self.assertEqual(details["cause_type"], type(reason).__name__)
+                self.assertEqual(details["route"], "/jobs/:id")
+                self.assertEqual(details["proxy_mode"], "https_proxy")
+                self.assertEqual(len(details["proxy_endpoint_id"]), 12)
+                self.assertIsNone(details["http_status"])
+                if reason.errno is not None:
+                    self.assertEqual(details["errno"], reason.errno)
+                self.assertNotIn("PRIVATE", message)
+                self.assertNotIn("proxy.test", message)
+                self.assertNotIn(self.claim["token"], message)
+                self.assertEqual(opener.open.call_count, 1)
+
+    def test_http_failure_retains_safe_ray_and_status_not_headers_or_body(self):
+        error = self.module.urllib.error.HTTPError("https://example.test/PRIVATE-JOB", 503, "PRIVATE-REASON",
+                    {"CF-Ray": "a4dc54eaf852c5e9-IAD", "Set-Cookie": "PRIVATE-COOKIE"}, io.BytesIO(b'PRIVATE-BODY'))
+        self.transport(error=error)
+        with self.assertRaises(RuntimeError) as caught:
+            self.module.api("/jobs/PRIVATE-JOB/reply", "POST", {"body": "PRIVATE-DRAFT"}, self.claim)
+        message = str(caught.exception)
+        details = json.loads(message.split("Diagnostic: ")[1])
+        self.assertEqual(details["http_status"], 503)
+        self.assertEqual(details["cf_ray"], "a4dc54eaf852c5e9-IAD")
+        self.assertEqual(details["route"], "/jobs/:id/reply")
+        self.assertEqual(details["phase"], "http_status")
+        self.assertNotIn("PRIVATE", message)
+
+    def test_invalid_json_is_distinguished_from_no_response_without_echoing_body(self):
+        self.transport(response=self.response(b'<html>PRIVATE-PROXY-RESPONSE</html>', ray="PRIVATE-NOT-A-RAY"))
+        with self.assertRaises(RuntimeError) as caught:
+            self.module.api("/poll")
+        details = json.loads(str(caught.exception).split("Diagnostic: ")[1])
+        self.assertEqual(details["phase"], "decode_json")
+        self.assertEqual(details["http_status"], 200)
+        self.assertEqual(details["cause_type"], "JSONDecodeError")
+        self.assertNotIn("cf_ray", details)
+        self.assertNotIn("PRIVATE", str(caught.exception))
+
+    def test_body_read_error_retains_response_metadata(self):
+        response = MagicMock(code=200, headers={"CF-Ray": "a4dc54eaf852c5e9-IAD"})
+        response.__enter__.return_value = response
+        response.read.side_effect = TimeoutError("PRIVATE-BODY")
+        self.transport(response=response)
+        with self.assertRaises(RuntimeError) as caught:
+            self.module.api("/poll")
+        details = json.loads(str(caught.exception).split("Diagnostic: ")[1])
+        self.assertEqual(details["phase"], "read_body")
+        self.assertEqual(details["http_status"], 200)
+        self.assertEqual(details["cf_ray"], "a4dc54eaf852c5e9-IAD")
+        self.assertNotIn("PRIVATE", str(caught.exception))
+
+    def test_diagnose_never_claims_or_wakes_even_with_available_work(self):
+        opener = self.transport(response=self.response(b'{"action":"wake","poll_after_seconds":30}'))
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.object(sys, "argv", ["casetrack.py", "diagnose"]), \
+             contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            self.assertEqual(self.module.run(), 0)
+        self.assertEqual(output.getvalue(), "")
+        self.assertFalse(self.module.JOB.exists())
+        self.assertEqual(opener.open.call_count, 1)
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.method, "GET")
+        self.assertTrue(request.full_url.endswith("/assistant/poll"))
+        details = json.loads(errors.getvalue().split("CaseTrack transport: ")[1])
+        self.assertEqual(details["phase"], "complete")
+        self.assertEqual(details["http_status"], 200)
+        self.assertNotIn("PRIVATE", errors.getvalue())
+
+    def test_lost_claim_response_exits_silent_without_retry_or_local_ack(self):
+        opener = self.transport()
+        opener.open.side_effect = [self.response(b'{"action":"wake"}'), TimeoutError("PRIVATE-PROXY")]
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.object(sys, "argv", ["casetrack.py", "poll"]), \
+             contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            self.assertEqual(self.module.run(), 1)
+        self.assertEqual(output.getvalue(), "silent\n")
+        self.assertEqual(opener.open.call_count, 2)
+        self.assertFalse(self.module.JOB.exists())
+        self.assertIn("server outcome may be unknown", errors.getvalue())
+        self.assertNotIn("PRIVATE", errors.getvalue())
+
+    def test_reply_transport_failure_keeps_exact_claim_and_draft(self):
+        self.module.write_json(self.module.JOB, self.claim)
+        draft = Path(self.directory.name) / "draft.json"
+        data = {"body": "PRIVATE-DRAFT", "context_version": "b" * 64}
+        self.module.write_json(draft, data)
+        opener = self.transport(error=ConnectionResetError(errno.ECONNRESET, "PRIVATE-PROXY"))
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.object(sys, "argv", ["casetrack.py", "reply", "--job", self.claim["id"], "--file", str(draft)]), \
+             contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            self.assertEqual(self.module.run(), 1)
+        self.assertEqual(output.getvalue(), "")
+        self.assertEqual(self.module.read_json(self.module.JOB), self.claim)
+        self.assertEqual(self.module.read_json(draft), data)
+        self.assertEqual(opener.open.call_count, 1)
+        self.assertNotIn("PRIVATE", errors.getvalue())
+
+    def test_proxy_diagnostics_distinguish_all_proxy_only_and_bypass(self):
+        with patch.object(self.module.urllib.request, "proxy_bypass", return_value=False):
+            details = self.module.proxy_details({"all": "http://PRIVATE-PROXY"}, "example.test")
+        self.assertEqual(details, {"https_proxy_configured": False, "all_proxy_configured": True, "proxy_mode": "direct"})
+        with patch.object(self.module.urllib.request, "proxy_bypass", return_value=True):
+            details = self.module.proxy_details({"https": "http://PRIVATE-PROXY"}, "example.test")
+        self.assertEqual(details["proxy_mode"], "bypass")
+        self.assertNotIn("proxy_endpoint_id", details)
 
 
 if __name__ == "__main__":
