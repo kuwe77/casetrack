@@ -75,6 +75,8 @@ import { SettingsPage } from "./components/settings-page";
 import { SignOut } from "./components/auth-gate";
 import { WhatsAppPage } from "./components/whatsapp-page";
 import { WorkspaceSetup } from "./components/workspace-setup";
+import { WorkspaceSwitcher } from "./components/workspace-switcher";
+import { ApiError, initializeWorkspace, openWorkspace } from "./lib/api";
 import { FolderKanban, Sun, Moon } from "lucide-react";
 import { Button } from "./components/ui/button";
 import {
@@ -112,12 +114,17 @@ export function App() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [loading, setLoading] = useState(true),
     [error, setError] = useState("");
+  const [chooseWorkspace, setChooseWorkspace] = useState(false);
+  const initialized = useRef<Promise<unknown> | null>(null);
   const reload = useCallback(async () => {
     setError("");
     try {
+      initialized.current ||= initializeWorkspace().catch(e => { initialized.current = null; throw e; });
+      await initialized.current;
       setWorkspace(await loadWorkspace());
     } catch (e) {
       setError(errorMessage(e));
+      if (e instanceof ApiError && [401, 403].includes(e.status)) setWorkspace(null);
       throw e;
     } finally {
       setLoading(false);
@@ -150,6 +157,8 @@ export function App() {
           Try again
         </Button>
         <SignOut />
+        <Button variant="outline" onClick={() => setChooseWorkspace(true)}>Choose workspace</Button>
+        {chooseWorkspace && <WorkspaceSwitcher currentId={null} onClose={() => setChooseWorkspace(false)}/>}
       </div>
     );
   if (loading)
@@ -160,9 +169,9 @@ export function App() {
       </div>
     );
   if (!workspace)
-    return <WorkspaceSetup onReady={() => void reload().catch(() => {})} />;
+    return <WorkspaceSetup onReady={openWorkspace} />;
   return (
-    <Dashboard workspace={workspace} reload={reload} refreshError={error} />
+    <Dashboard key={workspace.firm.id} workspace={workspace} reload={reload} refreshError={error} />
   );
 }
 function Dashboard({
@@ -174,6 +183,7 @@ function Dashboard({
   reload: () => Promise<void>;
   refreshError: string;
 }) {
+  const [workspacePicker, setWorkspacePicker] = useState(!!sessionStorage.getItem("casetrack-invitation"));
   const [dark, setDark] = useState(
     () => localStorage.getItem("casetrack-theme") === "dark",
   );
@@ -321,14 +331,15 @@ function Dashboard({
         <Button
           variant="ghost"
           className="workspace-switch"
-          onClick={() => go("settings")}
+          onClick={() => setWorkspacePicker(true)}
+          aria-label={`Switch workspace: ${w.firm.name}`}
         >
           <span className="workspace-monogram">
             <Buildings size={20} />
           </span>
           <span>
             <strong>{w.firm.name}</strong>
-            <small>Conveyancing workspace</small>
+            <small>Switch workspace</small>
           </span>
           <CaretDown size={14} />
         </Button>
@@ -450,17 +461,18 @@ function Dashboard({
             <Button
               variant="ghost"
               className="header-workspace"
-              onClick={() => go("settings")}
-              aria-label={`Workspace settings: ${w.firm.name}`}
+              onClick={() => setWorkspacePicker(true)}
+              aria-label={`Switch workspace: ${w.firm.name}`}
               title={w.firm.name}
             >
               <Avatar name={w.firm.name} small />
               <span>{w.firm.name}</span>
-              <GearSix size={17} />
+              <CaretDown size={17} />
             </Button>
           </div>
         </header>
         <main className="main-content">
+          {workspacePicker && <WorkspaceSwitcher currentId={w.firm.id} initialJoin={!!sessionStorage.getItem("casetrack-invitation")} onClose={() => setWorkspacePicker(false)}/>}
           {refreshError && (
             <div className="sync-error" role="alert">
               <span>Could not refresh records: {refreshError}</span>

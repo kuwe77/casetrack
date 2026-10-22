@@ -1,6 +1,6 @@
 # CaseTrack
 
-Conveyancing case management for law firms, hosted on Cloudflare Pages, Workers, D1 and private R2 storage. Firms register, create their own workspace, invite colleagues and issue scoped API keys for their AI agents.
+Conveyancing case management for law firms, hosted on Cloudflare Pages, Workers, D1 and private R2 storage. One account can create or join several workspaces. Each has separate records, members, WhatsApp settings and API keys. Use the workspace name in the sidebar or header to create, join or switch workspaces; new workspaces start empty. Switching reloads the dashboard and discards unsaved drafts.
 
 ## Features
 

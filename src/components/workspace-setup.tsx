@@ -6,15 +6,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { send } from "../lib/api";
 import { errorMessage } from "../lib/repository";
 import { SignOut } from "./auth-gate";
-export function WorkspaceSetup({ onReady }: { onReady: () => void }) {
+export function WorkspaceSetup({ onReady }: { onReady: (id: string) => void }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [invite, setInvite] = useState(sessionStorage.getItem("casetrack-invitation") || "");
   async function submit(e: FormEvent<HTMLFormElement>, join: boolean) {
     e.preventDefault(); setBusy(true); setError("");
     try {
-      if (join) { await send("/invitations/accept", { token: invite.includes("#") ? invite.split("#").at(-1) : invite.trim() }); sessionStorage.removeItem("casetrack-invitation"); }
-      else await send("/workspace", { name: String(new FormData(e.currentTarget).get("name")).trim() });
-      onReady();
+      const result = join
+        ? await send<{ id: string }>("/invitations/accept", { token: invite.includes("#") ? invite.split("#").at(-1)?.trim() : invite.trim() })
+        : await send<{ id: string }>("/workspace", { name: String(new FormData(e.currentTarget).get("name")).trim() });
+      if (join) sessionStorage.removeItem("casetrack-invitation");
+      onReady(result.id);
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
   return <main className="vault-screen"><a className="vault-brand" href="/"><FolderKanban/>CaseTrack</a><Card className="vault-card">

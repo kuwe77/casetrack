@@ -88,6 +88,12 @@ app.get("/api/openapi.json", c => c.json(openapi(new URL(c.req.url).origin)));
 
 app.use("/api/v1/*", async (c, next) => {
   let i: Identity;
+  // Account-level operations must remain reachable after a membership is removed.
+  const accountOperation = c.req.path === "/api/v1/workspaces" ||
+    (c.req.method === "POST" && ["/api/v1/workspace", "/api/v1/invitations/accept"].includes(c.req.path));
+  const downloadWorkspace = /^\/api\/v1\/documents\/[^/]+\/download$/.test(c.req.path) ? c.req.query("workspace_id") : undefined;
+  const requestedWorkspace = c.req.header("X-Workspace-Id") || downloadWorkspace;
+  if (downloadWorkspace && c.req.header("X-Workspace-Id") && downloadWorkspace !== c.req.header("X-Workspace-Id")) fail(400, "Workspace selection does not match.");
   const bearer = c.req.header("authorization");
   if (bearer) {
     if (!/^Bearer ct_[a-f0-9]{64}$/.test(bearer)) fail(401, "Invalid API key.");
@@ -96,13 +102,17 @@ app.use("/api/v1/*", async (c, next) => {
       WHERE k.token_hash=? AND k.revoked_at IS NULL AND k.expires_at>?`)
       .bind(await digest(bearer.slice(7)), now()).first<{ id: string; user_id: string; firm_id: string; scopes: string; email: string; role: string }>();
     if (!row) fail(401, "API key is expired, revoked, or unavailable.");
+    if (requestedWorkspace && requestedWorkspace !== row.firm_id) fail(403, "This API key belongs to a different workspace.");
     i = { userId: row.user_id, email: row.email, firmId: row.firm_id, role: row.role, keyId: row.id, scopes: JSON.parse(row.scopes) };
     await rateLimit(c.env, `api:${row.id}`);
     c.executionCtx.waitUntil(c.env.DB.prepare("UPDATE api_keys SET last_used_at=? WHERE id=?").bind(now(), row.id).run());
   } else {
     const s = await auth(c.env, new URL(c.req.url).origin).api.getSession({ headers: c.req.raw.headers });
     if (!s) fail(401, "Please sign in.");
-    const m = await c.env.DB.prepare("SELECT firm_id,role FROM workspace_members WHERE user_id=?").bind(s.user.id).first<{ firm_id: string; role: string }>();
+    const selected = accountOperation ? undefined : requestedWorkspace;
+    const m = await c.env.DB.prepare(`SELECT firm_id,role FROM workspace_members WHERE user_id=? ${selected ? "AND firm_id=?" : ""} ORDER BY created_at,firm_id LIMIT 1`)
+      .bind(...(selected ? [s.user.id, selected] : [s.user.id])).first<{ firm_id: string; role: string }>();
+    if (selected && !m) fail(403, "You no longer have access to this workspace. Choose another workspace.");
     i = { userId: s.user.id, email: s.user.email, firmId: m?.firm_id || null, role: m?.role || null, scopes: [...scopeNames] };
     await rateLimit(c.env, `user:${s.user.id}`, 300);
   }
@@ -110,6 +120,12 @@ app.use("/api/v1/*", async (c, next) => {
   await next();
 });
 app.get("/api/v1/me", c => c.json(identity(c)));
+app.get("/api/v1/workspaces", async c => {
+  sessionOnly(c);
+  const rows = await c.env.DB.prepare(`SELECT f.id,f.name,f.email,m.role FROM workspace_members m
+    JOIN firms f ON f.id=m.firm_id WHERE m.user_id=? ORDER BY m.created_at,f.id`).bind(identity(c).userId).all();
+  return c.json(rows.results);
+});
 app.get("/api/v1/workspace", async c => {
   scope(c, "workspace:read");
   const f = identity(c).firmId;
@@ -119,7 +135,6 @@ app.get("/api/v1/workspace", async c => {
 });
 app.post("/api/v1/workspace", async c => {
   sessionOnly(c);
-  if (identity(c).firmId) fail(409, "You already belong to a workspace.");
   const { name } = z.object({ name: z.string().trim().min(1).max(150) }).parse(await jsonBody(c));
   const id = uid(), i = identity(c);
   await c.env.DB.batch([
@@ -151,17 +166,20 @@ app.post("/api/v1/invitations", async c => {
 });
 app.post("/api/v1/invitations/accept", async c => {
   sessionOnly(c);
-  if (identity(c).firmId) fail(409, "You already belong to a workspace.");
   const b = z.object({ token: z.string().length(64) }).parse(await jsonBody(c));
   const hash = await digest(b.token), i = identity(c);
+  const invitation = await c.env.DB.prepare("SELECT firm_id FROM workspace_invites WHERE token_hash=? AND email=? AND expires_at>?")
+    .bind(hash, i.email.toLowerCase(), now()).first<{ firm_id: string }>();
+  if (!invitation) fail(400, "Invitation is expired, invalid, or belongs to another email address.");
   const result = await c.env.DB.batch([
     c.env.DB.prepare(`INSERT INTO workspace_members(user_id,firm_id,email,role,created_at)
-      SELECT ?,firm_id,?,'member',? FROM workspace_invites WHERE token_hash=? AND email=? AND expires_at>?`)
+      SELECT ?,firm_id,?,'member',? FROM workspace_invites WHERE token_hash=? AND email=? AND expires_at>?
+      ON CONFLICT(user_id,firm_id) DO NOTHING`)
       .bind(i.userId, i.email, now(), hash, i.email.toLowerCase(), now()),
-    c.env.DB.prepare("DELETE FROM workspace_invites WHERE token_hash=? AND email=? AND EXISTS(SELECT 1 FROM workspace_members WHERE user_id=?)").bind(hash, i.email.toLowerCase(), i.userId),
+    c.env.DB.prepare("DELETE FROM workspace_invites WHERE token_hash=? AND email=? AND expires_at>? AND EXISTS(SELECT 1 FROM workspace_members WHERE user_id=? AND firm_id=workspace_invites.firm_id)").bind(hash, i.email.toLowerCase(), now(), i.userId),
   ]);
-  if (!result[0].meta.changes) fail(400, "Invitation is expired, invalid, or belongs to another email address.");
-  return c.json({ success: true });
+  if (!result[1].meta.changes) fail(400, "Invitation is expired, invalid, or belongs to another email address.");
+  return c.json({ success: true, id: invitation.firm_id });
 });
 app.delete("/api/v1/invitations/:id", async c => {
   await c.env.DB.prepare("DELETE FROM workspace_invites WHERE id=? AND firm_id=?").bind(c.req.param("id"), owner(c)).run();
