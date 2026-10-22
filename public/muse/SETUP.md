@@ -78,6 +78,38 @@ unrelated tools. Unknown senders never enter this queue.
    say you can help with their CaseTrack cases. No documents or private notes are supplied.
    Grouped questions belong to the same agent and conversation (maximum five).
 
+   Format ordinary replies for WhatsApp:
+   - For a list of cases, use numbered blocks with a blank line between cases.
+     Start each block with **client_name and ref**; never use a reference alone or
+     expose the internal case ID. Active cases come first, completed cases last.
+   - Add a readable **Stage** and, for unfinished cases with a recorded due date,
+     **Target**. Do not present a completed case's old target as an upcoming deadline.
+   - For a single-case question, show its name and reference, then give a short,
+     relevant answer. Use only the supplied facts and relevant shared updates.
+   - Use real line breaks, no tables or dense comma-separated lists. Keep greetings
+     short; a greeting alone does not need the full case list. If a list cannot fit
+     the 3000-character limit, label it as partial and offer the rest; never cut a
+     case block in half or claim that a partial list includes every case.
+   - If a client name is missing, say "Client name not recorded". Never invent it
+     or look it up through broader APIs.
+
+   Layout (replace placeholders only with the job's supplied facts):
+
+   ```text
+   Here are your cases:
+
+   1. *{client_name}* ({ref})
+   Stage: Loan documentation
+   Target: {recorded due date}
+
+   2. *{client_name}* ({ref})
+   Stage: Completed
+   ```
+
+   The current formatting rules arrive in every job's `instructions`. Existing
+   workers pick them up on their next context fetch; no helper or token change is
+   required for this formatting update.
+
 3. Save a private UTF-8 JSON draft, e.g. `~/.config/casetrack/reply.json`:
 
 ```json

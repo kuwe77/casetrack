@@ -5,6 +5,7 @@ import { owner, firm, identity, scope, audit, type AppContext } from "./index";
 import { decrypt, digest, encrypt, fail, now, token } from "./security";
 import { checkZernioRecipient, sendProvider, type Settings } from "./whatsapp-provider";
 import { stageContext, followupInstructions, followupTemplate } from "./muse-followups";
+import { museReplyFormat } from "../src/lib/muse-reply-format";
 
 type App = Hono<{ Bindings: Env; Variables: { identity: Identity } }>;
 type Config = { firm_id: string; enabled: number; enabled_at: string; daily_limit: number; webhook_secret: string; webhook_id: string | null; context_revision: number };
@@ -25,6 +26,7 @@ const rules = [
   "Answer only CaseTrack questions about the supplied assigned cases. Never identify or disclose other agents or cases.",
   "For other topics, briefly explain that you can only help with this sender's CaseTrack cases.",
   "Use only the supplied facts. Do not guess legal advice, dates or progress. Internal notes and documents are not available.",
+  ...museReplyFormat,
   "Submit one concise reply through this job's reply endpoint. Do not send directly to WhatsApp or choose a recipient.",
   "If context_changed is returned, fetch the context again and rewrite the answer. Never reuse the old draft.",
 ];
@@ -59,10 +61,11 @@ async function allowedContext(env: Env, job: Job) {
     const data = { kind: "followup", agent: contact, notification, context_revision: after.context_revision };
     return { ...data, context_version: await digest(JSON.stringify(data)) };
   }
-  const cases = await env.DB.prepare(`SELECT c.id,c.ref,c.type,c.status,c.due_date,
+  const cases = await env.DB.prepare(`SELECT c.id,c.ref,c.buyer AS client_name,c.type,c.status,c.due_date,
     COALESCE(r.shared_update,'') AS shared_update
     FROM cases c LEFT JOIN whatsapp_rules r ON r.case_id=c.id AND r.firm_id=c.firm_id
-    WHERE c.firm_id=? AND c.agent_id=? ORDER BY c.id LIMIT 101`).bind(job.firm_id, job.agent_id).all();
+    WHERE c.firm_id=? AND c.agent_id=?
+    ORDER BY CASE WHEN c.status='completed' THEN 1 ELSE 0 END,c.buyer COLLATE NOCASE,c.id LIMIT 101`).bind(job.firm_id, job.agent_id).all();
   // Fail closed instead of silently claiming a partial list is all of this agent's cases.
   if (cases.results.length > 100) fail(409, "This sender has too many cases for automatic replies. Ask a team member to handle it.");
   const messages = await env.DB.prepare("SELECT id,question,received_at FROM reply_jobs WHERE firm_id=? AND (id=? OR batch_id=?) ORDER BY received_at,id")

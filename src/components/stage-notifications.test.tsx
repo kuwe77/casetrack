@@ -40,5 +40,7 @@ it("copies the Muse-only upgrade prompt including the explicit follow-up flag an
   expect(text).toContain("poll --include-followups");
   expect(text).toContain("Never save proxy passwords");
   expect(text).toContain("notification.approved_message");
+  expect(text).toContain("numbered list (1., 2., 3.)");
+  expect(text).toContain("client_name and ref");
   expect(text).toContain("Reuse them; do not ask for a token");
 });

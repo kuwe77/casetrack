@@ -52,8 +52,8 @@ async function fixture() {
     db.sqlite.prepare("INSERT INTO api_keys(id,firm_id,user_id,name,prefix,token_hash,scopes,created_at,expires_at) VALUES(?,?,?,?,?,?,?,'2026-01-01','2099-01-01')")
       .run(f, f, f, "Assistant test", "ct_test", await digest(keys[f]), '["assistant:reply"]');
     db.sqlite.prepare("INSERT INTO agents(id,firm_id,name,created_at) VALUES(?,?,?,'2026-01-01')").run(f, f, `Agent ${f}`);
-    db.sqlite.prepare("INSERT INTO cases(id,firm_id,ref,buyer,type,status,priority,agent_id,notes,created_at,updated_at) VALUES(?,?,?,'PRIVATE BUYER','SPA','spa','normal',?,'PRIVATE NOTES','2026-01-01','2026-01-01')")
-      .run(f, f, `REF-${f}`, f);
+    db.sqlite.prepare("INSERT INTO cases(id,firm_id,ref,buyer,seller,property,type,status,priority,agent_id,notes,created_at,updated_at) VALUES(?,?,?,?, 'PRIVATE SELLER','PRIVATE PROPERTY','SPA','spa','normal',?,'PRIVATE NOTES','2026-01-01','2026-01-01')")
+      .run(f, f, `REF-${f}`, f === "a" ? "Nur Aisyah Rahman" : "PRIVATE OTHER FIRM CLIENT", f);
     db.sqlite.prepare("INSERT INTO whatsapp_contacts(firm_id,agent_id,phone,enabled,consent) VALUES(?,?,?,1,1)").run(f, f, "+60123456789");
     db.sqlite.prepare("INSERT INTO whatsapp_settings(firm_id,enabled,dry_run,updated_at,provider,zernio_account_id,zernio_api_key) VALUES(?,1,1,'2026-01-01','zernio',?,?)")
       .run(f, `account-${f}`, await encrypt(env, "test-provider-key"));
@@ -263,10 +263,31 @@ describe("Muse reply assistant", () => {
     const job = (await f.claim())!;
     const ctx = await f.context(job);
     expect(ctx.cases).toHaveLength(1);
-    expect(ctx.cases[0]).toMatchObject({ ref: "REF-a", shared_update: "Signing ready" });
+    expect(ctx.cases[0]).toMatchObject({ ref: "REF-a", client_name: "Nur Aisyah Rahman", shared_update: "Signing ready" });
+    expect(Object.keys(ctx.cases[0]).sort()).toEqual(["client_name", "due_date", "id", "ref", "shared_update", "status", "type"]);
     expect(JSON.stringify(ctx)).not.toMatch(/PRIVATE|OTHER AGENT|REF-b/);
     expect((await f.request(`${prefix}/jobs/${job.id}`, "GET", undefined, job, "b")).status).toBe(404);
     expect((await f.request(`${prefix}/jobs/${job.id}`, "GET", undefined, { ...job, token: "0".repeat(64) })).status).toBe(404);
+  });
+  it("supplies named cases with numbered reply instructions, completed cases last, and invalidates renamed-client drafts", async () => {
+    const f = await fixture();
+    f.db.sqlite.exec(`INSERT INTO cases(id,firm_id,ref,buyer,type,status,priority,agent_id,created_at,updated_at) VALUES
+      ('done','a','CT/020','Amira Sofea','SPA','completed','normal','a','2026-01-01','2026-01-01'),
+      ('loan','a','CT/018','Kelvin Lim','Loan','loan','normal','a','2026-01-01','2026-01-01');`);
+    await f.webhook(f.event());
+    const claimed = await (await f.request(`${prefix}/claim`, "POST", {})).json() as any;
+    const job = claimed.job as Claim, ctx = await f.context(job);
+    expect(ctx.cases.map((c: {client_name: string}) => c.client_name)).toEqual(["Kelvin Lim", "Nur Aisyah Rahman", "Amira Sofea"]);
+    expect(ctx.instructions).toEqual(claimed.instructions);
+    const instructions = ctx.instructions.join("\n");
+    expect(instructions).toContain("numbered list (1., 2., 3.)");
+    expect(instructions).toContain("client_name and ref");
+    expect(instructions).toContain("blank line between blocks");
+    expect(instructions).toContain("Client name not recorded");
+    f.db.sqlite.exec("UPDATE cases SET buyer='Aisyah Rahman' WHERE id='a'");
+    expect((await f.context(job)).context_version).not.toBe(ctx.context_version);
+    expect((await f.request(`${prefix}/jobs/${job.id}/reply`, "POST", {body:"Old name",context_version:ctx.context_version},job)).status).toBe(409);
+    expect(f.count("whatsapp_messages")).toBe(1); // Only the incoming question; no stale reply sent.
   });
   it("claims one worker atomically, batches five questions maximum and safely reclaims an expired lease", async () => {
     const f = await fixture();
