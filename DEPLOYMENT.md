@@ -1,5 +1,24 @@
 # Deploy to Cloudflare
 
+## JuriSync rebrand and domain preparation (24 October 2026)
+
+- Public product name: **JuriSync**. The current working address remains
+  `https://casetrack.pages.dev` during domain activation.
+- `jurisync.xyz` and `www.jurisync.xyz` are associated with the existing Pages
+  project. A Free DNS zone has proxied CNAME records for both names pointing to
+  `casetrack.pages.dev`.
+- Shinjiru still reports the new registration as **Pending** and prevents domain
+  management. The registrar nameserver change has **not** been made. Once active,
+  use exactly `david.ns.cloudflare.com` and `emma.ns.cloudflare.com`, then verify
+  both custom domains and their HTTPS certificates before switching public links.
+- Keep the existing Pages project, D1, R2, scheduler, API key prefixes, Muse helper
+  filename/state and provider idempotency identifiers. This rebrand does not
+  create a new database, migrate records, reset tokens or change running hooks.
+- Muse prompts generate their download links from the current website origin, so
+  the same build works on the current address and the future custom domain.
+- Do not redirect existing API or webhook endpoints away from the current address
+  while integrations are still using it.
+
 ## Current instance (20 October 2026)
 
 - Production website: https://casetrack.pages.dev

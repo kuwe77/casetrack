@@ -1,4 +1,8 @@
-# CaseTrack
+# JuriSync
+
+Previously named CaseTrack. The application now uses JuriSync branding. Existing
+API tokens, Muse hooks and workspace data remain compatible; infrastructure and
+integration identifiers keep their existing names.
 
 Conveyancing case management for law firms, hosted on Cloudflare Pages, Workers, D1 and private R2 storage. One account can create or join several workspaces. Each has separate records, members, WhatsApp settings and API keys. Use the workspace name in the sidebar or header to create, join or switch workspaces; new workspaces start empty. Switching reloads the dashboard and discards unsaved drafts.
 

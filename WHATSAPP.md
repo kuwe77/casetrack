@@ -1,16 +1,16 @@
 # WhatsApp Business integration
 
-CaseTrack connects through Zernio or directly to the Meta WhatsApp Cloud API. Hosting, encrypted credentials, messages, scheduled jobs and firm data live in Cloudflare. WhatsApp itself is Meta's service and cannot be replaced by Cloudflare storage.
+JuriSync connects through Zernio or directly to the Meta WhatsApp Cloud API. Hosting, encrypted credentials, messages, scheduled jobs and firm data live in Cloudflare. WhatsApp itself is Meta's service and cannot be replaced by Cloudflare storage.
 
 ## Zernio setup and inbox
 
-In the firm's WhatsApp page, select **Zernio**, enter the Zernio account ID and API key, and save. The server verifies that the key owns an active WhatsApp account. The key is encrypted and is never returned to the browser or external agents. Each connected Zernio account can belong to only one CaseTrack firm.
+In the firm's WhatsApp page, select **Zernio**, enter the Zernio account ID and API key, and save. The server verifies that the key owns an active WhatsApp account. The key is encrypted and is never returned to the browser or external agents. Each connected Zernio account can belong to only one JuriSync firm.
 
 The connected inbox lists conversations and loads messages with explicit pagination. Refresh retrieves new messages and delivery/read statuses without sending read receipts. Retrieved messages are reconciled into the firm message log. The optional reply assistant adds its own account-scoped webhook subscription without replacing unrelated registrations.
 
 ## Muse reply assistant
 
-Meta Muse is the external reasoning agent. CaseTrack does not host an LLM. See [the Muse setup guide](public/muse/SETUP.md) and [standard-library poller](public/muse/casetrack.py).
+Meta Muse is the external reasoning agent. JuriSync does not host an LLM. See [the Muse setup guide](public/muse/SETUP.md) and [standard-library poller](public/muse/casetrack.py).
 
 The owner enables agent replies, connects the signed Zernio webhook and creates an `assistant:reply` key. This scope cannot be combined with any other scope and requires an owner to mint it. Incoming messages qualify only for the current connected account, verified phone and consented registered agent, after enabling, within 23 hours. Unknown/hidden senders, standby events, synthetic test events and non-text messages do not create AI jobs. STOP opts out immediately.
 
@@ -26,7 +26,7 @@ Switching accounts or disabling messaging pauses the assistant and cancels waiti
 
 External agents use `whatsapp:read` for `/whatsapp/connection`, `/whatsapp/contacts`, `/whatsapp/conversations`, `/whatsapp/conversations/{id}/messages`, the local `/whatsapp/messages` log, and rules. Follow every `nextCursor` until null; IDs and cursors are opaque. This exposes the history available from the connected provider, including incoming/outgoing messages and attachment links. The server pins the firm's account ID and rejects data belonging to a different provider account.
 
-Sends use the same `/whatsapp/messages` endpoint for either provider. CaseTrack reconciles recipient opt-outs before Zernio sends and requires a recent incoming message for free-text replies. An approved template is required outside the reply window. Switching provider/account disables existing schedules so the owner can review them before re-enabling.
+Sends use the same `/whatsapp/messages` endpoint for either provider. JuriSync reconciles recipient opt-outs before Zernio sends and requires a recent incoming message for free-text replies. An approved template is required outside the reply window. Switching provider/account disables existing schedules so the owner can review them before re-enabling.
 
 ## Direct Meta setup
 
@@ -47,4 +47,4 @@ Every send requires an `Idempotency-Key`. New manual keys must not start with th
 
 Resetting a rule to an already processed timestamp does not resend that occurrence. Duplicate occurrences and individual rule failures cannot abort other selected rules or the shared expiry cleanup. The ten-rule selection remains a shared capacity limit, not a per-firm delivery guarantee.
 
-API keys with `whatsapp:read` can read their firm's messages and rules. `whatsapp:write` can send to approved recipients and update rules. Provider credentials and recipient consent remain owner-controlled in the app. An external AI agent can combine WhatsApp scopes with case/task/note scopes to operate its own workflows. CaseTrack does not execute arbitrary agent code or infer changes from untrusted inbound messages.
+API keys with `whatsapp:read` can read their firm's messages and rules. `whatsapp:write` can send to approved recipients and update rules. Provider credentials and recipient consent remain owner-controlled in the app. An external AI agent can combine WhatsApp scopes with case/task/note scopes to operate its own workflows. JuriSync does not execute arbitrary agent code or infer changes from untrusted inbound messages.

@@ -326,7 +326,7 @@ function Dashboard({
           <div className="brand-mark">
             <FolderKanban size={20} />
           </div>
-          <span>CaseTrack</span>
+          <span>JuriSync</span>
         </a>
         <Button
           variant="ghost"
@@ -393,7 +393,7 @@ function Dashboard({
             className="desktop-brand"
             href="#overview"
             onClick={() => go("overview")}
-            aria-label="CaseTrack overview"
+            aria-label="JuriSync overview"
           >
             <span className="brand-mark">
               <FolderKanban size={23} />
@@ -684,7 +684,7 @@ function Dashboard({
                 />
               </Card>
               <div className="page-footnote">
-                <span className="foot-brand">casetrack.</span>
+                <span className="foot-brand">jurisync.</span>
                 <span>Your firm’s workspace</span>
                 <span>Malaysia · MYR</span>
               </div>

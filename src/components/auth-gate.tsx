@@ -53,7 +53,7 @@ function AccountForm() {
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
   return <main className="vault-screen">
-    <a className="vault-brand" href="/"><FolderKanban />CaseTrack</a>
+    <a className="vault-brand" href="/"><FolderKanban />JuriSync</a>
     <Card className="vault-card"><CardHeader>
       <CardTitle>{mode === "register" ? "Start your firm’s workspace" : mode === "recover" ? "Recover your account" : "Welcome back"}</CardTitle>
       <CardDescription>{mode === "register" ? "Create your account, then create a firm or join an invitation." : mode === "recover" ? "Use your saved recovery code to set a new password." : "Sign in to continue your matters."}</CardDescription>
@@ -72,7 +72,7 @@ function AccountForm() {
         <Button variant="link" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>{mode === "login" ? "New here? Create an account" : "Already registered? Sign in"}</Button>
         {mode === "login" && <Button variant="link" onClick={() => setMode("recover")}>Use a recovery code</Button>}
       </div>
-      <p className="vault-help">Read how CaseTrack handles your data in our <a href="/privacy">privacy information</a>.</p>
+      <p className="vault-help">Read how JuriSync handles your data in our <a href="/privacy">privacy information</a>.</p>
     </CardContent></Card>
   </main>;
 }

@@ -19,7 +19,7 @@ export function WorkspaceSetup({ onReady }: { onReady: (id: string) => void }) {
       onReady(result.id);
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
-  return <main className="vault-screen"><a className="vault-brand" href="/"><FolderKanban/>CaseTrack</a><Card className="vault-card">
+  return <main className="vault-screen"><a className="vault-brand" href="/"><FolderKanban/>JuriSync</a><Card className="vault-card">
     <CardHeader><CardTitle>{invite ? "Join your firm" : "Name your workspace"}</CardTitle><CardDescription>Create a private workspace for your firm or use a colleague’s invitation.</CardDescription></CardHeader>
     <CardContent>
       <form className="vault-form" onSubmit={e => void submit(e, false)}><label>Firm name<Input name="name" required maxLength={150} autoComplete="organization" placeholder="Your firm or practice"/></label><Button disabled={busy}>Create workspace</Button></form>

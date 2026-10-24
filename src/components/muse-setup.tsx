@@ -34,7 +34,7 @@ function MusePrompt({ followups = false }: { followups?: boolean }) {
     <header className="settings-section-header">
       <span className="muse-only-label">Muse agent only</span>
       <h2 id={`${id}-heading`}>{followups ? "Set up stage notifications + replies" : "Set up incoming replies only"}</h2>
-      <p>This prompt is only for Meta Muse agents that already have CaseTrack API access. {followups ? "Copy it into Muse to upgrade the existing hook for case-stage updates and incoming replies." : "Use this version if you only want replies to incoming questions."}</p>
+      <p>This prompt is only for Meta Muse agents that already have JuriSync API access. {followups ? "Copy it into Muse to upgrade the existing hook for case-stage updates and incoming replies." : "Use this version if you only want replies to incoming questions."}</p>
     </header>
     <p className="settings-help muse-prompt-help">The prompt reuses your existing connection and includes the latest connection and retry instructions. No API token is included.</p>
     <div className="settings-actions">

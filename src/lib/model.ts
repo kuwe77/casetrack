@@ -198,7 +198,7 @@ export function downloadCsv(cases: CaseRecord[], agents: Agent[]) {
   );
   const a = document.createElement("a");
   a.href = url;
-  a.download = `casetrack-cases-${today()}.csv`;
+  a.download = `jurisync-cases-${today()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
