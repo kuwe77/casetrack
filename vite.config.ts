@@ -10,7 +10,8 @@ export default defineConfig({
     server: {
       host: "127.0.0.1",
       strictPort: true,
-      proxy: { "/api": "http://127.0.0.1:8788" },
+      // Keep the browser's Host so the API's same-origin check matches the dev server origin.
+      proxy: { "/api": { target: "http://127.0.0.1:8788", changeOrigin: false } },
     },
     build: { chunkSizeWarningLimit: 700 },
 });
